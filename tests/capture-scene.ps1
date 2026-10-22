@@ -1,4 +1,4 @@
-﻿param([switch]$Connections,[switch]$Cube,[switch]$Structures,[switch]$Gameplay,[switch]$Inserters,[switch]$MinimalLine,[switch]$ParallelLine,[string]$InspectSave='',[string]$PluginDll='')
+param([switch]$Connections,[switch]$Cube,[switch]$Structures,[switch]$Gameplay,[switch]$Inserters,[switch]$MinimalLine,[switch]$ParallelLine,[string]$InspectSave='',[string]$PluginDll='')
 $ErrorActionPreference = 'Stop'
 if (@($Connections,$Cube,$Structures,$Gameplay,$Inserters,$MinimalLine,$ParallelLine | Where-Object { $_ }).Count -gt 1) { throw 'Select one capture scene.' }
 $project = Split-Path $PSScriptRoot -Parent

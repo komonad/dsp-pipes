@@ -21,5 +21,3 @@ The connection gallery uses a separate 69-node scene. Its far row contains a str
 The structure gallery compares native belts and pipes in serpentine, elevated crossing and loop layouts. The crossing runs occupy separate elevations and components. The belt loop has two incoming branches and a gap between them: 24 vertices, 24 edges and one independent cycle. The pipe layout closes this gap into a theta graph: 25 vertices, 26 edges and two independent cycles. A graph composed solely of native belts has at most one outgoing connection per vertex, giving each connected component at most one independent cycle.
 
 The cube fixture has side length 3 world units, 32 pipe nodes and 36 unit edges along its twelve sides. Its five independent cycles share one inventory. Same-camera empty/filled overview and corner captures, plus steep/low empty views, show vertical connections and overlapping transparent surfaces. Inserting 1,280 water units and extracting them at one node verifies immediate visibility at all 32 nodes.
-
-

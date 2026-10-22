@@ -39,4 +39,3 @@
 反馈问题时，附最短复现步骤、游戏版本、mod 列表、截图和 profile 内的 `BepInEx/LogOutput.log`。存档相关问题同时附 `.dsv` 与 `.moddsv`。
 
 `tests/runtime-results.txt` 记录运行回归结果；`samples/parallel-fluid-line/parallel-line-results.txt` 记录完整存档重载、稳定产量、库存守恒、建造栏按钮及管道/传送带分拣器存取验证。性能数据的测量范围见 `tests/PERFORMANCE.md`。
-
