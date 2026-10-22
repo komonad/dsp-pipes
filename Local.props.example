@@ -1,0 +1,5 @@
+<Project><PropertyGroup>
+  <Managed>C:/Program Files (x86)/Steam/steamapps/common/Dyson Sphere Program/DSPGAME_Data/Managed</Managed>
+  <GameAssembly>D:/path/to/Assembly-CSharp-publicized.dll</GameAssembly>
+  <BepInExCore>C:/path/to/profile/BepInEx/core</BepInExCore>
+</PropertyGroup></Project>
