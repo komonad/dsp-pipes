@@ -1,19 +1,32 @@
+# Build output
 **/bin/
 **/obj/
 dist/
-screenshots/
+
+# Local machine configuration
 Local.props
-*.log
+
+# Game assemblies, debug symbols and packaged archives
 *.dll
 *.pdb
 *.zip
+
+# Save data
 *.dsv
 *.moddsv
-*.user
-.vs/
 
+# Test output and rendered captures
+screenshots/
 tests/*-results.txt
-samples/**/*.dsv
-samples/**/*.moddsv
-samples/**/*.dll
 samples/**/*-results.txt
+
+# Editor, IDE and OS files
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.log
+Thumbs.db
+desktop.ini
+.DS_Store
