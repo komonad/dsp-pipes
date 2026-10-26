@@ -1,26 +1,26 @@
-# Build output
+# 构建输出
 **/bin/
 **/obj/
 dist/
 
-# Local machine configuration
+# 本机配置
 Local.props
 
-# Game assemblies, debug symbols and packaged archives
+# 游戏程序集、调试符号与打包产物
 *.dll
 *.pdb
 *.zip
 
-# Save data
+# 存档数据
 *.dsv
 *.moddsv
 
-# Test output and rendered captures
+# 测试输出与渲染截图
 screenshots/
 tests/*-results.txt
 samples/**/*-results.txt
 
-# Editor, IDE and OS files
+# 编辑器、IDE 与系统文件
 .vs/
 .idea/
 .vscode/
