@@ -70,7 +70,7 @@ PipeTypes.Register("example.transport", definition);
 
 `CreateItem` 复制基础模板及数组字段，独立设置 ID、名称、描述和配方索引；模型原型与 `PrefabDesc` 仍由游戏数据库共享。模板在库的 pre-add 回调中准备，生命周期独立于内置物品是否入库，因此关闭内置内容后仍可创建外部物品。扩展通过 `PipeAppearance` 定制渲染。物品 ID、背包位置和配方 ID 的冲突管理属于扩展的原型注册流程。
 
-关闭内置内容时，默认类型键 `com.komonad.dsp.fluidpipes:default` 保持未注册，`PipeApi` 的四个内置物品和配方 ID 属性返回 0；库完成外部类型索引和物品策略初始化后，`IsReady` 照常变为 `true`。初始化时序、进程级设置及存档内容要求见 [选择内置内容](API.zh-CN.md#选择内置内容)。
+关闭内置内容时，默认类型键 `com.komonad.dsp.fluidpipes:default` 保持未注册，`PipeApi` 的四个内置物品和配方 ID 属性返回 0；库完成外部类型索引和物品策略初始化后，`IsReady` 照常变为 `true`。初始化时序、进程级设置及存档内容要求见 [选择内置内容](API.md#选择内置内容)。
 
 现有名称、配方、图标、科技和建造栏可以保留。独立物品示例见 [CopperPipes](../examples/CopperPipes/CopperPipesPlugin.cs)。
 

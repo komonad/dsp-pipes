@@ -2,7 +2,7 @@
 
 Fluid Pipes 同时提供管道建筑和供其它 BepInEx mod 使用的共享库存 API。安装插件及基础依赖后，即可使用管道和阀门的建造、运输、渲染与交互功能。外部集成通过 `FluidPipes.API` 命名空间访问同一套运行逻辑，实现类型使用 `internal` 可见性。
 
-独立管道类型的注册、外观和原型接入由 `PipeTypes` 提供，详见[管道类型与外观扩展](PIPE_TYPES.zh-CN.md)。[CopperPipes](../examples/CopperPipes/README.zh-CN.md) 是仅依赖公开 API 的独立插件，注册铜制管道物品、配方与材质。
+独立管道类型的注册、外观和原型接入由 `PipeTypes` 提供，详见[管道类型与外观扩展](PIPE_TYPES.md)。[CopperPipes](../examples/CopperPipes/README.md) 是仅依赖公开 API 的独立插件，注册铜制管道物品、配方与材质。
 
 ## 添加依赖
 
@@ -32,7 +32,7 @@ Fluid Pipes 的 GUID 是 `com.komonad.dsp.fluidpipes`。运行时需要安装 Fl
 
 ## 初始化和生命周期
 
-0.7.0 的 `PipeTypes` 提供独立物品类型、连接方向、结构组件和渲染扩展，详见 [类型与外观扩展](PIPE_TYPES.zh-CN.md)。共享库存 API 适用于 `PipeBehavior.SharedInventory`；`Structure` 类型通过拓扑 API 接入外部运行逻辑。
+0.7.0 的 `PipeTypes` 提供独立物品类型、连接方向、结构组件和渲染扩展，详见 [类型与外观扩展](PIPE_TYPES.md)。共享库存 API 适用于 `PipeBehavior.SharedInventory`；`Structure` 类型通过拓扑 API 接入外部运行逻辑。
 
 在依赖 mod 的 `Awake` 中可调用 `RegisterTransportItems`，物品 ID 会在游戏数据库初始化时解析。注册参数数组被复制；相同物品可由多个 mod 独立注册。注册返回 `IDisposable`，在所属插件的 `OnDestroy` 中释放。每个注册和配置授权分别管理生命周期，物品在至少一项授权有效时保持准入。
 

@@ -1,67 +1,69 @@
-# Architecture
+# 架构说明
 
-## Module boundaries
+> 本文档同时提供[英文版](ARCHITECTURE.en.md)。
 
-| Directory | Responsibility |
+## 模块边界
+
+| 目录 | 职责 |
 | --- | --- |
-| `Core/` | Game-independent connectivity, single-item inventories, deterministic split/merge accounting and immutable item-admission sets |
-| `src/API/` | Supported external contract, validated options and detached snapshots |
-| `src/Configuration/` | BepInEx configuration parsing and startup options |
-| `src/Runtime/` | Factory ownership, effective item admission, shared native reservoirs and valve simulation |
-| `src/Integration/Belts/` | Native cargo-path adaptation, Harmony method hooks and belt lifecycle hooks |
-| `src/Integration/Reservoirs/` | Native tank/station port suppression, shared extraction and reservoir lifecycle hooks |
-| `src/Integration/Machines/` | Optional production-machine slot exposure and native connection lifecycle hooks |
-| `src/Geometry/` | Procedural pipe and inserter mesh generation |
-| Other `src/` files | Prototype registration, construction interaction, topology metadata, inspection UI and rendering |
+| `Core/` | 与游戏无关的连通性、单物品库存、确定性的拆分/合并记账与不可变的物品准入集合 |
+| `src/API/` | 受支持的对外契约、经校验的选项与独立快照 |
+| `src/Configuration/` | BepInEx 配置解析与启动选项 |
+| `src/Runtime/` | 工厂归属、生效的物品准入、共享原生储液罐与阀门模拟 |
+| `src/Integration/Belts/` | 原生货运路径适配、Harmony 方法钩子与传送带生命周期钩子 |
+| `src/Integration/Reservoirs/` | 原生储液罐/物流塔接口抑制、共享抽取与储液罐生命周期钩子 |
+| `src/Integration/Machines/` | 可选的生产机器插槽暴露与原生连接生命周期钩子 |
+| `src/Geometry/` | 程序化管道与分拣器网格生成 |
+| 其它 `src/` 文件 | 原型注册、建造交互、拓扑元数据、检视界面与渲染 |
 
-The external API delegates to runtime services. Harmony cargo hooks resolve native targets and call `PipeCargoAdapter`; the adapter implements native transfer-size and partial-acceptance conventions. Admission is enforced at the shared inventory insertion boundary, so direct API callers, inserters, native cargo calls and the inspection panel use the same rule.
+外部 API 委托给运行时服务。Harmony 货运钩子解析原生目标并调用 `PipeCargoAdapter`；该适配器实现原生的传输数量与部分接受约定。准入在共享库存的插入边界强制执行，因此直接调用 API 的调用方、分拣器、原生货运调用和检视面板都遵循同一规则。
 
-Public type registration, appearance settings, geometry profiles and value snapshots live in separate API files. Registry ownership and connection notification queues belong to internal runtime services. `CopperPipes.dll` consumes the public contract as an independently loaded plugin, registering an opaque material variant while retaining the default glass type and shared-inventory family.
+公共类型注册、外观设置、几何配置与值快照位于各自独立的 API 文件中。注册表归属与连接通知队列属于内部运行时服务。`CopperPipes.dll` 作为独立加载的插件使用公共契约，注册一种不透明材质变体，同时保留默认玻璃类型与共享库存家族。
 
-## Inventory invariants
+## 库存不变量
 
-`PipeGraph` owns each pure pipe component's item count and proliferator points. `PipePools` reads and writes the authoritative native tank and station fields. A shared space may contain multiple graph components joined by native reservoirs. External callers receive detached inventory and settings values.
+`PipeGraph` 持有每个纯管道连通分量的物品数量与增产点。`PipePools` 读写权威的原生储液罐与物流塔字段。一个共享空间可以包含多个由原生储液罐连接的图连通分量。外部调用方获得的是独立快照形式的库存与设置值。
 
-Every space has one item identity, including any fixed station-slot filter. Connections reject incompatible identities. Reservoir conflicts suspend balancing and inventory operations while preserving stock. Native tanks enforce their fluid-only storage type after the global item-admission check.
+每个空间只有一种物品标识，包括任何固定的物流塔插槽筛选。连接会拒绝不兼容的标识。储液罐冲突会暂停均衡与库存操作，同时保留现有库存。原生储液罐在全局物品准入检查之后强制其仅限流体的储存类型。
 
-Item admission is an immutable set published after prototype initialization and registration changes. Explicit configuration exclusions take precedence over all grants. Registration ownership is independent: releasing one grant preserves overlapping grants. Pool caches track both graph topology and policy versions. Revocation blocks insertion; extraction remains available for retained stock.
+物品准入是在原型初始化与注册变更之后发布的不可变集合。显式配置排除优先于所有授权。注册归属相互独立：释放一项授权会保留与之重叠的其它授权。池缓存同时跟踪图拓扑与策略版本。撤销会阻止插入；对于已保留的存货，提取仍然可用。
 
-Storage arithmetic preserves integer counts and total proliferator points. Insertion validates capacity before committing the full transfer. Shared-reservoir insertion records modified stores; a partial write triggers restoration of those stores and rejection of the batch. Native cargo adaptation supports partial acceptance with proportional point accounting.
+存储运算保留整数数量与增产点总量。插入在提交完整传输之前校验容量。共享储液罐插入会记录被修改的存储区；部分写入会触发这些存储区的恢复并拒绝该批次。原生货运适配支持部分接受，并按比例计算增产点。
 
-OrbitalRing infinite tanks own their inventory and activation sentinel independently. The optional compatibility module resolves the prototype and transfer method from the loaded plugin, then keeps these tanks outside shared-reservoir reconciliation. Native input and activation remain authoritative. Pipe output follows a two-tick cadence for 30 items/s; blocked output accrues no transfer credit. Cadence state follows the cargo-path lifetime through weak references. Ordinary belt calls retain native behavior.
+OrbitalRing 的无限储液罐独立持有自己的库存与激活哨兵。可选的兼容模块从已加载的插件中解析原型与传输方法，然后让这些储液罐不参与共享储液罐协调。原生输入与激活保持权威。管道输出按两 tick 的节奏提供 30 物品/秒；被阻塞的输出不累积传输额度。节奏状态通过弱引用跟随货运路径的生命周期。普通传送带调用保留原生行为。
 
-## Lifetime and threading
+## 生命周期与线程
 
-Direct machine connections bind an existing pipe slot to a native inserter slot. Machine input/output buffers retain native ownership. Each endpoint carries an immutable item/direction selection and enable state. Transfers use the same typed factory I/O methods as inserters; input writes follow native demand thresholds, and product reads follow pipe capacity. A bounded per-tick batch limits endpoint work. Rejected deliveries retain staged items until delivery or dismantling, and staged stock participates in endpoint serialization.
+直接机器连接把已有的管道插槽绑定到原生分拣器插槽。机器输入/输出缓冲区保留原生归属。每个接口携带不可变的物品/方向选择与启停状态。传输使用与分拣器相同的带类型工厂 I/O 方法；输入写入遵循原生需求阈值，产物读取遵循管道容量。每 tick 的有界批次限制接口工作量。被拒绝的投递会保留暂存物品，直到投递或拆除，暂存库存参与接口的序列化。
 
-Enabled recipe-compatible filters reserve the identity of the entire shared storage space. Filter indexes follow connection, recipe, admission and reservoir-binding revisions. Stable transfer checks use cached storage-group identities; inspection and entity migration visit bounded native slots. Global disablement suspends transfer and reservations while preserving native connections and saved settings.
+启用的配方兼容筛选会预留整个共享储存空间的标识。筛选索引跟随连接、配方、准入与储液罐绑定的修订版本。稳定传输检查使用缓存的存储组标识；检查与实体迁移遍历有界的原生插槽。全局禁用会暂停传输与预留，同时保留原生连接与已保存的设置。
 
-Native prebuild migration updates reciprocal object slots in separate writes. Endpoint observation remains suspended across that mutation so settings migrate after both sides become consistent. Pipe-only construction port poses retain native slot indices and place a terminal outside the machine housing before joining the grid route.
+原生待建对象迁移以多次独立写入更新相互对应的对象插槽。端点观察在该变更期间保持挂起，以便设置在两端一致之后迁移。纯管道的建造接口姿态保留原生插槽索引，并在接入网格路由之前把端点放置在机器外壳之外。
 
-Inventory inspection reuses the native tank window and pointer gestures. A private UI projection supplies shared totals to the stock control; the resulting gesture delta commits through shared storage, with exact hand counts and proliferator points. Rejected gestures restore the hand state. Current-tank clearing removes only the selected tank's physical stock; whole-network clearing visits every storage unit in its shared space. Subsequent simulation updates redistribute remaining fluid by capacity.
+库存检查复用原生储液罐窗口与指针手势。私有 UI 投影向库存控件提供共享总量；由此产生的手势增量通过共享存储提交，并保留精确的手持数量与增产点。被拒绝的手势会恢复手持状态。清除当前储液罐只移除所选储液罐的物理存货；清除整个管网会遍历其共享空间中的每个储存单元。随后的模拟更新按容量重新分配剩余流体。
 
-Inspection properties and controls clone native tank UI elements. Action captions retain the native button font, material, size and style. All adjacent connections appear in a two-column list whose height follows its row count; cached button instances track their current connection index. The current pipe contributes a green model silhouette to the native outline pass. A subsequent cyan pass draws directly adjacent nodes using the same temporary buffers and separately owned composite materials. Per-node outline meshes share the renderer's geometry cache identity and rebuild when that geometry changes. Closing inspection releases outline meshes; screen labels yield to the panel bounds.
+检视属性与控件克隆原生储液罐 UI 元素。操作标题保留原生按钮的字体、材质、尺寸和样式。所有相邻连接显示在按行数确定高度的两列列表中；缓存的按钮实例跟踪其当前连接索引。当前管道为原生描边通道提供绿色模型轮廓。随后的青色通道使用相同的临时缓冲区和各自持有的合成材质绘制直接相邻的节点。逐节点描边网格共享渲染器的几何缓存标识，并在该几何变化时重建。关闭检视会释放描边网格；屏幕标签让位于面板边界。
 
-Sandbox infinity valves regulate one endpoint's entire shared space. At-least mode supplies a deficit, at-most mode removes a surplus, and exact mode performs either operation toward the integer target count. Both operations use shared inventory boundaries and preserve item identity, capacity, reservations and proliferator accounting. Infinity regulation depends on sandbox mode and the valve enable state; normal valves use electrical pump simulation. Saved infinity settings resume with their sandbox gate after loading.
+沙盒永续管调节一个接口的整个共享空间。至少模式补足缺口，至多模式移除盈余，精确模式朝整数目标数量执行任一种操作。两类操作都使用共享库存边界，并保留物品标识、容量、预留和增产点记账。永续调节取决于沙盒模式与阀门启用状态；普通阀门使用电动泵送模拟。已保存的永续设置会在加载后连同其沙盒开关一起恢复。
 
-Factory graphs and native owner bindings are cleared on save changes. Entity IDs are native pool indices and may be reused. Each external API call resolves its target through the supplied factory/entity binding, which the caller refreshes after save or entity changes. Additional undirected links are persisted independently of the four native belt connection slots.
+存档变更时会清除工厂图与原生归属绑定。实体 ID 是原生池索引，可能被复用。每次外部 API 调用都通过传入的工厂/实体绑定解析目标，调用方在存档或实体变化后刷新该绑定。附加的无向连接独立于四个原生传送带连接插槽持久化。
 
-Native object-connection rows use the stride of the allocated entity or prebuild pool. Prebuild migration and stale-record cleanup derive that stride from the matching arrays, including OrbitalRing's expanded connection layout. Migration preserves reciprocal slot identities before retiring the source row.
+原生对象连接行使用已分配实体池或待建对象池的步长。待建对象迁移和过期记录清理从匹配的数组推导该步长，包括 OrbitalRing 扩展后的连接布局。迁移在废弃源行之前保留相互对应的插槽标识。
 
-The core graph synchronizes topology and per-component inventory. Shared-reservoir operations synchronize their state and use native station storage locks where required. Game-object access follows the native simulation lifecycle: external factory operations run in the main thread or an exclusive factory simulation context. Registration changes run on the main thread.
+核心图同步拓扑与各连通分量的库存。共享储液罐操作同步其状态，并在需要时使用原生物流塔储存锁。游戏对象访问遵循原生模拟生命周期：外部工厂操作在主线程或独占的工厂模拟上下文中运行。注册变更在主线程上运行。
 
-## Cost model
+## 成本模型
 
-Each registered pipe type defines simulation behavior, direction policy, connection family, geometry dimensions and appearance independently. Shared-inventory types use undirected connectivity. Structural types expose graph queries and connection notifications for an external simulation; directed structural types retain native belt input/output slots and cargo paths. Compatibility requires matching behavior, direction policy and connection family. Registration seals against the final item database before factory initialization.
+每个注册的管道类型分别定义模拟行为、方向策略、连接家族、几何尺寸和外观。共享库存类型使用无向连通性。结构类型为外部模拟提供图查询与连接通知；有向结构类型保留原生传送带输入/输出插槽与货运路径。兼容性要求行为、方向策略和连接家族一致。注册在工厂初始化之前对最终物品数据库封闭。
 
-Connection notifications accumulate in a synchronized queue and dispatch on the main thread. Each dispatch deduplicates factory/entity pairs, invokes subscribers outside the queue lock and defers reentrant mutations to the next batch. Save changes clear pending notifications. Consumers resolve entity identity again when processing events because native entity pool indices are reusable.
+连接通知累积在同步队列中，并在主线程分发。每次分发对工厂/实体对去重，在队列锁之外调用订阅者，并把重入变更推迟到下一批。存档变更会清除待处理通知。由于原生实体池索引可复用，使用方在处理事件时会重新解析实体标识。
 
-Stable pure-pipe I/O accesses inventory through the component index. Shared I/O visits storage units as needed; reconciliation visits reservoirs and graph components. Topology/policy changes rebuild reservoir bindings lazily. Node removal or an interior edge cut may traverse the affected graph component. API inventory queries use cached totals; full snapshots additionally aggregate capacity contributors.
+稳定的纯管道 I/O 通过连通分量索引访问库存。共享 I/O 按需遍历储存单元；协调会遍历储液罐与图连通分量。拓扑/策略变化会惰性重建储液罐绑定。移除节点或切断内部边可能遍历受影响的图连通分量。API 库存查询使用缓存总量；完整快照还会汇总容量贡献者。
 
-Rendering caches geometry independently of inventory. Fluid presence and item identity select materials, while connection changes invalidate geometry caches. Native construction geometry, connection slots and inserter logic form the compatibility boundaries tested inside the Unity runtime.
+渲染独立缓存几何，与库存无关。流体有无与物品标识决定材质选择，连接变化则使几何缓存失效。原生建造几何、连接插槽和分拣器逻辑构成在 Unity 运行时内测试的兼容边界。
 
-## Verification
+## 验证
 
-`tests/CoreSuite.cs` exercises connectivity, conservation, randomized operations, concurrent core I/O and admission-set rules. `tests/ApiChecks.cs` exercises the public contract and verifies XML documentation for every exported API type, member and parameter. Native runtime fixtures test cargo hooks, containers, valves, placement and inserters. The example consumer builds as its own assembly.
+`tests/CoreSuite.cs` 覆盖连通性、守恒、随机操作、并发核心 I/O 与准入集合规则。`tests/ApiChecks.cs` 覆盖公共契约，并校验每个导出的 API 类型、成员和参数的 XML 文档。原生运行时测试装置验证货运钩子、容器、阀门、放置和分拣器。示例使用方编译为独立程序集。
 
-Each completed pipe node contributes 10 units of capacity. Graph format 1 accepts historical inventories up to the former 100-unit per-node limit. Imported surplus retains its stock and proliferator points; shared balancing waits until the combined capacity can accommodate it, and admission resumes as withdrawals create space. Inventory replacement preserves or reduces surplus.
+每个已完成的管道节点贡献 10 单位容量。图格式 1 接受历史库存，最多达到原先每节点 100 单位的限制。导入的超额部分保留其存货与增产点；共享均衡会等待，直到合并后的容量能够容纳它，随着提取腾出空间，准入随之恢复。库存替换会保留或减少超额部分。

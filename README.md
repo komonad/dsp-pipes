@@ -2,6 +2,8 @@
 
 戴森球计划的无向共享库存管道 mod，同时提供供其它 mod 依赖的 API。验证游戏版本为 0.10.35.29151。
 
+文档以简体中文为主；架构、开发、渲染和性能测量提供同名的 `.en.md` 英文译本。代码注释和 XML 文档注释使用中文。
+
 ## 安装与使用
 
 依赖 BepInEx 5、CommonAPI、LDBTool、DSPModSave。将发布包中的 `BepInEx/plugins/FluidPipes/FluidPipes.dll` 放到对应 profile，同一 profile 只保留一份插件。
@@ -39,7 +41,7 @@ DeniedItemIds =
 
 允许列表支持额外物品，禁止列表优先于默认规则和 mod 注册。修改规则保留既有库存；未获准的物品仍可取出。F8 领取测试建筑通过 `General.EnableDebugHotkey=true` 开启，默认关闭。
 
-详见 [配置说明](docs/CONFIGURATION.zh-CN.md)。
+详见 [配置说明](docs/CONFIGURATION.md)。
 
 机器直连默认关闭。启用 `Integration.EnableMachinePorts=true` 并重启后，手持管道可直接从机器插槽向外拖拽，也可将管道末端接到机器。插槽外的接管连接实际插槽位置与格点路线。建成后点击相连管段，选择“机器直连接口设置”，在配方物品列表中选择供料或提取。唯一匹配项会自动选择；流体到达后会按物品类型重新匹配，其余多候选接口保留手动选择。关闭功能会暂停直连存取，保留连接、库存和设置。
 
@@ -53,12 +55,12 @@ DeniedItemIds =
 
 编译时引用 `FluidPipes.dll` 并设置 `Private=false`。DLL 旁的 `FluidPipes.xml` 提供 IDE 文档。注册额外物品可在依赖 mod 的 `Awake` 中进行；工厂操作需等待 `PipeApi.IsReady` 并传入有效的工厂与实体 ID。
 
-- [API 接入文档](docs/API.zh-CN.md)：生命周期、库存语义、线程、单位、失败行为和兼容性。
+- [API 接入文档](docs/API.md)：生命周期、库存语义、线程、单位、失败行为和兼容性。
 - [可编译示例](examples/PipeConsumer/ConsumerPlugin.cs)：依赖声明、授权生命周期和有界存取。
-- [铜管扩展](examples/CopperPipes/README.zh-CN.md)：独立插件注册铜制管道、配方和材质，与默认玻璃管共享库存。
+- [铜管扩展](examples/CopperPipes/README.md)：独立插件注册铜制管道、配方和材质，与默认玻璃管共享库存。
 - [架构说明](docs/ARCHITECTURE.md)：模块边界、库存守恒、原生接口和性能约束。
 - [渲染说明](docs/RENDERING.md)：程序化建模、材质和截图场景。
-- [管道类型与外观扩展](docs/PIPE_TYPES.zh-CN.md)：独立原型、有向或无向连接、外部运行逻辑、材质和动画。
+- [管道类型与外观扩展](docs/PIPE_TYPES.md)：独立原型、有向或无向连接、外部运行逻辑、材质和动画。
 
 API v1 的集成范围是单工厂内现有管道、储液罐、物流塔和阀门的共享库存。自定义容器、多人物流同步和跨工厂管网需要进一步扩展接口。分馏塔使用原生交互路径。
 
@@ -73,6 +75,6 @@ pwsh -NoProfile -File tests/run.ps1
 pwsh -NoProfile -File package.ps1
 ```
 
-参见 [开发指南](docs/DEVELOPMENT.md)、[手动测试说明](TESTING.zh-CN.md) 和 [性能测量](tests/PERFORMANCE.md)。自动检查覆盖 API 文档、准入优先级、原生货运适配、库存守恒、储存容器、阀门及大图 I/O。运行时测试使用独立的后台游戏进程；交互帧率和第三方运输补丁兼容性需在实际存档中验证。
+参见 [开发指南](docs/DEVELOPMENT.md)、[手动测试说明](TESTING.md) 和 [性能测量](tests/PERFORMANCE.md)。自动检查覆盖 API 文档、准入优先级、原生货运适配、库存守恒、储存容器、阀门及大图 I/O。运行时测试使用独立的后台游戏进程；交互帧率和第三方运输补丁兼容性需在实际存档中验证。
 
 发布包包含 mod DLL。示例存档、截图和测试结果位于仓库中，基础依赖通过 mod 管理器安装。

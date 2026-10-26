@@ -1,10 +1,12 @@
-# Development
+# 开发指南
 
-## Local build
+> 本文档同时提供[英文版](DEVELOPMENT.en.md)。
 
-Copy `Local.props.example` to `Local.props`. Set `Managed` to the installed game's managed assembly directory and `BepInExCore` to the dependency profile's BepInEx core directory. Native runtime fixtures additionally use the publicized assembly selected by `GameAssembly`; the production plugin references the unmodified game assembly.
+## 本地构建
 
-The plugin targets .NET Framework 4.7.2 and C# 7.3. A .NET SDK, framework reference assemblies and PowerShell 7 are required. The standalone core checks target .NET 8.
+将 `Local.props.example` 复制为 `Local.props`。把 `Managed` 设为已安装游戏的管理程序集目录，把 `BepInExCore` 设为依赖 profile 的 BepInEx 核心目录。原生运行时夹具还会使用由 `GameAssembly` 选择的公有化（publicized）程序集；正式插件引用未修改的游戏程序集。
+
+插件目标框架为 .NET Framework 4.7.2 和 C# 7.3。需要 .NET SDK、框架引用程序集和 PowerShell 7。独立核心检查的目标框架为 .NET 8。
 
 ```powershell
 dotnet build FluidPipes.csproj -c Release
@@ -15,28 +17,28 @@ pwsh -NoProfile -File tests/run.ps1
 dotnet build tests/SceneCapture.csproj -c Release
 ```
 
-`bin/Release/FluidPipes.dll` is the runtime plugin. The adjacent `FluidPipes.xml` provides IDE documentation for API consumers. The inventory consumer builds as `PipeConsumer.dll`. The material extension builds as `CopperPipes.dll`; it registers an independent item and recipe through the public API. Set its `FluidPipesAssemblyPath` property to build against a published DLL.
+`bin/Release/FluidPipes.dll` 是运行时插件。与其同目录的 `FluidPipes.xml` 为 API 使用方提供 IDE 文档。库存使用方示例编译为 `PipeConsumer.dll`。材质扩展编译为 `CopperPipes.dll`；它通过公开 API 注册独立物品和配方。若要针对已发布的 DLL 构建，设置其 `FluidPipesAssemblyPath` 属性。
 
-## Validation
+## 验证
 
-The core suite includes one-million-node inventory benchmarks, randomized connectivity/conservation checks and concurrent graph operations. Runtime checks launch an isolated hidden game process, verify native Harmony integration and exit after writing `tests/runtime-results.txt`. They also require XML summaries and parameter documentation for every exported API member, and reject implementation types exposed outside the API namespace.
+核心测试套件包含一百万节点的库存基准测试、随机化连通性/守恒检查和并发图操作。运行时检查会启动隔离的隐藏游戏进程，验证原生 Harmony 集成，并在写入 `tests/runtime-results.txt` 后退出。这些检查还要求每个导出的 API 成员都带有 XML 摘要和参数文档，并拒绝在 API 命名空间之外暴露实现类型。
 
-The default runtime run builds and loads `CopperPipes.dll` as a separate BepInEx plugin. Its tests check independent prototypes and materials, mixed copper/glass networks, native insertion and extraction, persistence and dismantling. `pwsh -NoProfile -File tests/run.ps1 -WithoutExtensions` runs with that plugin absent and writes `tests/runtime-standalone-results.txt`. The material comparison in `screenshots/pipe-copper-consumer.png` uses the live pipe renderer in a Unity runtime fixture.
+默认运行时运行会构建 `CopperPipes.dll` 并将其作为独立的 BepInEx 插件加载。其测试检查独立原型与材质、铜/玻璃混合管网、原生插入与提取、持久化和拆除。`pwsh -NoProfile -File tests/run.ps1 -WithoutExtensions` 在该插件缺失时运行，并写入 `tests/runtime-standalone-results.txt`。`screenshots/pipe-copper-consumer.png` 中的材质对比使用 Unity 运行时夹具中的实时管道渲染器。
 
-`pwsh -NoProfile -File tests/run-copper-interactions.ps1` exercises native path and inserter build tools in a separate sandbox with full foundation. Matching glass and copper routes cover different headings, elevation changes and drag directions. The fixture verifies preview and completed poses, pending grid marks, dismantle hover signs, and pipe-side inserter attachment frames. Results and endpoint captures are copied to `screenshots/copper-interactions/`.
+`pwsh -NoProfile -File tests/run-copper-interactions.ps1` 在铺满地基的独立沙盒中演练原生路径与分拣器建造工具。相互对应的玻璃和铜制路径覆盖不同朝向、高度变化和拖拽方向。该夹具验证预览与建成姿态、待建网格标记、拆除悬停标识以及管道侧分拣器附着框。结果和端点截图复制到 `screenshots/copper-interactions/`。
 
-The scene harness creates an isolated sandbox, covers the planet with native foundation and renders game cameras to offscreen textures. Production fixtures can export a native save and companion mod data. The validation environment supports one active game instance, so exit the current game before launching a harness process.
+场景测试装置会创建隔离沙盒，用原生地基覆盖整个星球，并将游戏相机渲染到离屏纹理。生产夹具可导出原生存档和配套 mod 数据。验证环境只支持一个活动游戏实例，因此启动测试装置进程前需退出当前游戏。
 
 ```powershell
 pwsh -NoProfile -File tests/capture-scene.ps1 -ParallelLine
 pwsh -NoProfile -File tests/capture-scene.ps1 -ParallelLine -InspectSave samples/parallel-fluid-line/parallel-fluid-line.dsv
 ```
 
-The parallel fixture contains three plastic chemical plants, sandbox source/sink towers and parallel pipe/belt lanes. It checks stable production, count conservation, pipe-to-belt inserter transfer and native construction-bar selection. Other harness modes cover geometry, connection patterns, cube networks, valve interaction and inserter appearance.
+并行夹具包含三座塑料化工厂、沙盒源/汇物流塔以及并行的管道/传送带通道。它检查稳定生产、数量守恒、管道到传送带的分拣器转移和原生建造栏选择。其它测试装置模式覆盖几何、连接模式、立方体管网、阀门交互和分拣器外观。
 
-Performance reports identify the runtime, workload and measured CPU stages for each result. Interactive frame-rate assessment requires a complete loaded factory and frame-level measurements. The validation environment's allocation counter reports zero for a known allocation, so current checks classify it as unavailable and verify physical cargo counts separately. See [measurements](../tests/PERFORMANCE.md).
+性能报告会为每项结果标明运行时、工作负载和所测量的 CPU 阶段。交互式帧率评估需要完整加载的工厂和帧级测量。验证环境的分配计数器对已知分配报告为零，因此当前检查将其归类为不可用，并单独校验物理货物数量。参见[测量数据](../tests/PERFORMANCE.md)。
 
-The OrbitalRing compatibility harness copies core files, preloaders and the required plugins from an installed OrbitalRing profile into a fresh directory under `obj/orbitalring-checks/`. It launches a hidden sandbox with an isolated document/save directory. Select the source profile explicitly:
+OrbitalRing 兼容性测试装置会把已安装 OrbitalRing profile 中的核心文件、预加载器和所需插件复制到 `obj/orbitalring-checks/` 下的全新目录。它启动带隔离文档/存档目录的隐藏沙盒。需显式选择源 profile：
 
 ```powershell
 pwsh -NoProfile -File tests/run-orbitalring.ps1 -SourceProfile C:/path/to/OrbitalRing-profile
@@ -44,31 +46,35 @@ pwsh -NoProfile -File tests/run-orbitalring.ps1 -SourceProfile C:/path/to/Orbita
 pwsh -NoProfile -File tests/run-orbitalring.ps1 -SourceProfile C:/path/to/OrbitalRing-profile -Vanilla
 ```
 
-Each supply case synchronously steps `FactoryStorage.GameTickTank` 600 times, equivalent to ten seconds at 60 ticks per second. The fixture activates an infinite tank through its native inventory window, attaches a real pipe or blue belt, and records extraction totals and reservoir contents. Assertions cover 300-item continuous output, buffered backpressure, prefilled inventory, independent source capacity, activation-state retention, source switches, mixed-fluid rejection, finite count/point conservation, activation through pipe input and independent rates for multiple sources sharing one node. An unrestricted output-port probe clears the blue belt buffer every tick to verify native insertion attempts; native belt throughput requires advancing the belt simulation. `orbitalring-results.txt` records the loaded versions and each measurement; `Completed=1` indicates that all assertions passed.
+每个供给用例会同步步进 `FactoryStorage.GameTickTank` 600 次，相当于以每秒 60 tick 运行十秒。夹具通过原生库存窗口激活一个无限储液罐，接入真实管道或蓝色传送带，并记录提取总量和储液罐内容。断言覆盖 300 物品的持续输出、带缓冲的背压、预填充库存、独立的源容量、激活状态保持、源切换、混合流体拒绝、有限数量/点数守恒、通过管道输入激活，以及多个源共享同一节点时的独立速率。无限制输出端口探针每 tick 清空蓝色传送带缓冲区，以验证原生插入尝试；原生传送带吞吐需要推进传送带模拟。`orbitalring-results.txt` 记录加载的版本和每项测量结果；`Completed=1` 表示所有断言通过。
 
-Construction cases use native path determination, build conditions, prebuild placement and completion. Horizontal and elevated paths complete in opposite orders; each completion checks adjacent reciprocal native slots, and the finished route supports remote inventory extraction. The vanilla mode omits OrbitalRing and runs these same construction cases. BuildBarTool mode additionally verifies the two item bindings in the transport category's upper row.
+建造用例使用原生路径判定、建造条件、待建放置和完成逻辑。水平路径和高架路径以相反顺序完成；每次完成都会检查相邻且互为对应的原生插槽，完成后的路径支持远程库存提取。原版（vanilla）模式不加载 OrbitalRing，运行相同的建造用例。BuildBarTool 模式还会校验运输分类上排的两个物品绑定。
 
-The direct-machine fixture runs with `Integration.EnableMachinePorts=true` in a fresh hidden sandbox. It covers multi-liquid sulfuric-acid production, typed native I/O, demand limits, backpressure, reservations, recipe changes and persistence. Native construction runs in both directions against rotated fractional slot coordinates. Native tank pointer gestures verify shared insertion/extraction and separate tank/network clearing. Inspector checks cover native typography, padding, current/adjacent node silhouettes and stable outline caching. Sandbox valve cases cover all three level modes, isolated-side selection, fluid conflicts, proportional proliferator removal, sandbox gating and settings serialization. It writes thirteen screenshots and a report beneath `obj/machine-port-checks/`, and copies them to `screenshots/machine-ports/`.
+机器直连夹具在全新的隐藏沙盒中以 `Integration.EnableMachinePorts=true` 运行。它覆盖多液体硫酸生产、带类型的原生 I/O、需求限制、背压、预留、配方变化和持久化。原生建造针对旋转后的小数插槽坐标双向运行。原生储液罐指针手势校验共享存取以及储液罐/管网的独立清空。检视器校验覆盖原生排版、内边距、当前/相邻节点轮廓和稳定的描边缓存。沙盒阀门用例覆盖全部三种液位模式、隔离侧选择、流体冲突、按比例移除增产点、沙盒门控和设置序列化。它会在 `obj/machine-port-checks/` 下写出十三张截图和一份报告，并复制到 `screenshots/machine-ports/`。
 
 ```powershell
 pwsh -NoProfile -File tests/run-machine-ports.ps1
 pwsh -NoProfile -File tests/run-machine-ports.ps1 -InspectSave C:/path/to/machine-ports.dsv
 ```
 
-## API maintenance
+## API 维护
 
-Public types belong in `FluidPipes.API`, except the BepInEx plugin entry point. Use PascalCase for public types, methods, properties and enum values; camelCase for parameters and private fields. Public API members carry XML summaries, parameter meanings, units, failure behavior and applicable lifetime/thread constraints. Internal comments document invariants and game API constraints.
+除 BepInEx 插件入口点外，公开类型都归属于 `FluidPipes.API`。公开类型、方法、属性和枚举值使用 PascalCase；参数和私有字段使用 camelCase。公开 API 成员需带有 XML 摘要、参数含义、单位、失败行为以及适用的生命周期/线程约束。内部注释记录不变式和游戏 API 约束。
 
-Formatting uses the pinned local CSharpier tool and `.csharpierrc.json`. Restore it with `dotnet tool restore`, run `dotnet csharpier format .` to format, and `dotnet csharpier check .` to verify. Use explicit braces and one declaration per statement. Name gameplay variables by their domain roles; geometry may use conventional coordinate notation. Harmony hook argument names follow the native signatures because Harmony binds those names.
+格式使用固定版本的本地 CSharpier 工具和 `.csharpierrc.json`。通过 `dotnet tool restore` 还原，运行 `dotnet csharpier format .` 执行格式化，运行 `dotnet csharpier check .` 校验。使用显式大括号，每条语句只声明一个变量。玩法变量按其在领域中的角色命名；几何相关变量可使用常规坐标记法。Harmony 钩子的参数名遵循原生签名，因为 Harmony 按名称绑定这些参数。
 
-Keep the external facade independent of Harmony patch classes. New item insertion paths enforce admission at the shared inventory boundary. Cargo hooks return control to native methods for ordinary belt targets. Storage and topology changes retain save compatibility and conservation checks.
+对外门面应保持独立于 Harmony 补丁类。新增物品的插入路径在共享库存边界执行准入。对于普通传送带目标，货运钩子将控制权交回原生方法。存储和拓扑变更保持存档兼容性和守恒检查。
 
-## Packaging
+## 文档与注释语言
+
+文档以简体中文为主：主文件使用 `*.md`，英文译本使用同名的 `*.en.md`，并在文首互相链接。代码注释和 XML 文档注释使用中文。新增或修改的公开 API 文档先写中文；术语保持一致，代码标识符、路径和专有名词保留原文。
+
+## 打包
 
 ```powershell
 pwsh -NoProfile -File package.ps1
 ```
 
-The archive contains only `BepInEx/plugins/FluidPipes/FluidPipes.dll`. Dependencies, example plugins, saves, screenshots and verification output remain separate. `play.ps1 -PrepareOnly` prepares a local profile; `-ProfilePath` selects its destination.
+归档包仅包含 `BepInEx/plugins/FluidPipes/FluidPipes.dll`。依赖、示例插件、存档、截图和验证输出保持独立。`play.ps1 -PrepareOnly` 准备本地 profile；`-ProfilePath` 选择其目标位置。
 
-`examples/CopperPipes/package.ps1` packages the material extension separately. Its archive contains only `BepInEx/plugins/CopperPipes/CopperPipes.dll`; FluidPipes supplies the runtime dependency.
+`examples/CopperPipes/package.ps1` 单独打包材质扩展。其归档包仅包含 `BepInEx/plugins/CopperPipes/CopperPipes.dll`；FluidPipes 提供运行时依赖。
