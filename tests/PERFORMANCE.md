@@ -2,6 +2,14 @@
 
 The allocation counter in this Unity runtime returns zero for a known 32 KiB managed allocation. Current checks use this calibration to classify the counter as unavailable. Historical zero-byte readings below come from that counter. Allocation measurements require a working counter; physical cargo counts are checked separately.
 
+## Ten-unit pipe capacity, 0.6.2
+
+Each pipe node contributes 10 units. Native runtime I/O on 100,000 nodes connected to a 10,000-unit tank provides 1,010,000 units of shared capacity. Three samples of 200,000 insert/extract pairs measure a median of 322.6 ns per operation, with zero topology visits and conserved inventory and proliferator points. A separate 10,000-inserter workload on 100,000 nodes averages 1.098 ms per tick, with a 2.875 ms p95 and 3.444 ms maximum over 240 ticks. These measurements exclude frame rendering.
+
+The standalone million-node graph measures 135.5 ns per operation median. Historical-capacity save checks preserve surplus inventory and points across split, merge, withdrawal and serialization, and enforce the new admission limit.
+
+Native inspection checks render one selected node and two or four direct neighbors through separate green and cyan passes. Stable inspection retains cached outline geometry across frames. Test plugins silence Unity audio on startup and each update.
+
 ## API and configurable transport, 0.4.0
 
 The native runtime regression suite completes with zero failures, including exported API documentation, overlapping item grants, configuration exclusions, retained inventory after revocation, native solid insertion/extraction, partial acceptance, tower sharing and native tank restrictions.
@@ -92,6 +100,8 @@ An elevated 16-node ring is placed in two batches with recycled pending IDs and 
 Raw interaction measurements: `interaction-results.txt`.
 
 ## Correctness coverage and limits
+
+The 0.5.0 machine-port fixture attaches one enabled water-filtered production endpoint to a 100,000-node network. After warming the caches, 100,000 remote insert/extract pairs average 343.3 ns per operation in Unity/Mono. All 200,000 operations retain the topology visit counter and reservoir index revision. The fixture also checks remote item reservation, mixed-item rejection, native input-buffer conservation and global disablement. This measurement isolates inventory API work from production ticks, rendering and construction.
 
 Both suites pass. Coverage includes type/capacity rejection, filtered extraction, empty-network fluid changes, deterministic splits, compatible/incompatible merges, binary save restoration, 20,000 randomized operations checked against an independent connectivity and stock oracle, and concurrent I/O during topology changes. Runtime coverage includes cached/native factory I/O, physical-cargo absence, ordinary belt regression checks, native path concatenation, closed loops, junctions, rerouting, dismantling/refund accounting, belt ID recycling, tank updates, station updates, and splitter rejection.
 
