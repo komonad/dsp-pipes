@@ -2,33 +2,33 @@ using System;
 
 namespace FluidPipes.API
 {
-    /// <summary>The transfer direction at a production-machine connection.</summary>
+    /// <summary>生产机器连接处的传输方向。</summary>
     public enum MachinePortDirection
     {
-        /// <summary>Supply the machine's recipe input buffer from the pipe inventory.</summary>
+        /// <summary>从管道库存向机器的配方输入缓冲供给。</summary>
         IntoMachine,
 
-        /// <summary>Collect the machine's recipe products into the pipe inventory.</summary>
+        /// <summary>将机器的配方产物收集到管道库存中。</summary>
         OutOfMachine,
     }
 
-    /// <summary>Immutable direction, item filter and enable state for one machine slot.</summary>
+    /// <summary>单个机器插槽的不可变方向、物品过滤器与启用状态。</summary>
     public sealed class MachinePortOptions
     {
-        /// <summary>The recipe item assigned to this connection; zero awaits item selection.</summary>
+        /// <summary>分配给此连接的配方物品；为零表示等待物品选择。</summary>
         public int ItemId { get; }
 
-        /// <summary>The transfer direction relative to the machine.</summary>
+        /// <summary>相对于机器的传输方向。</summary>
         public MachinePortDirection Direction { get; }
 
-        /// <summary>Whether the configured connection participates in transfer and item reservation.</summary>
+        /// <summary>已配置的连接是否参与传输与物品预留。</summary>
         public bool Enabled { get; }
 
-        /// <summary>Creates connection settings. Recipe and network compatibility are checked when applied.</summary>
-        /// <param name="itemId">A positive item ID, or zero to await item selection.</param>
-        /// <param name="direction">The transfer direction relative to the machine.</param>
-        /// <param name="enabled">Whether the connection participates in transfer and item reservation.</param>
-        /// <exception cref="ArgumentOutOfRangeException">The item ID or direction is invalid.</exception>
+        /// <summary>创建连接设置。应用时会检查配方与网络的兼容性。</summary>
+        /// <param name="itemId">正数物品 ID，或为零以等待物品选择。</param>
+        /// <param name="direction">相对于机器的传输方向。</param>
+        /// <param name="enabled">连接是否参与传输与物品预留。</param>
+        /// <exception cref="ArgumentOutOfRangeException">物品 ID 或方向无效。</exception>
         public MachinePortOptions(
             int itemId = 0,
             MachinePortDirection direction = MachinePortDirection.IntoMachine,
@@ -48,19 +48,19 @@ namespace FluidPipes.API
         }
     }
 
-    /// <summary>A detached view of a native machine-slot connection.</summary>
+    /// <summary>原生机器插槽连接的独立视图。</summary>
     public readonly struct MachinePortSnapshot
     {
-        /// <summary>The pipe entity or negative prebuild ID.</summary>
+        /// <summary>管道实体 ID，或负数形式的待建对象 ID。</summary>
         public int PipeEntityId { get; }
 
-        /// <summary>The machine entity or negative prebuild ID.</summary>
+        /// <summary>机器实体 ID，或负数形式的待建对象 ID。</summary>
         public int MachineEntityId { get; }
 
-        /// <summary>The zero-based native inserter slot on the machine.</summary>
+        /// <summary>机器上从零开始计数的原生分拣器插槽。</summary>
         public int SlotIndex { get; }
 
-        /// <summary>The immutable settings currently assigned to the connection.</summary>
+        /// <summary>当前分配给该连接的不可变设置。</summary>
         public MachinePortOptions Options { get; }
 
         internal MachinePortSnapshot(PipeMachinePorts.Connection connection)

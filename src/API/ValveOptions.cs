@@ -2,57 +2,57 @@ using System;
 
 namespace FluidPipes.API
 {
-    /// <summary>Permitted transfer direction between the valve's native ports A and B.</summary>
+    /// <summary>阀门原生端口 A 与 B 之间允许的传输方向。</summary>
     public enum FlowDirection
     {
-        /// <summary>Transfers may occur in either direction.</summary>
+        /// <summary>两个方向均可传输。</summary>
         Both,
 
-        /// <summary>Only transfers from A to B are permitted.</summary>
+        /// <summary>仅允许从 A 到 B 的传输。</summary>
         AtoB,
 
-        /// <summary>Only transfers from B to A are permitted.</summary>
+        /// <summary>仅允许从 B 到 A 的传输。</summary>
         BtoA,
     }
 
-    /// <summary>The fill-level objective used to choose transfer direction and quantity.</summary>
+    /// <summary>用于选择传输方向与传输量的填充水平目标。</summary>
     public enum LevelControl
     {
-        /// <summary>Reduces the fill-fraction difference between both sides.</summary>
+        /// <summary>减小两侧的填充比例差。</summary>
         Equalize,
 
-        /// <summary>Maintains side A at the target fraction.</summary>
+        /// <summary>将 A 侧维持在目标比例。</summary>
         KeepA,
 
-        /// <summary>Maintains side B at the target fraction.</summary>
+        /// <summary>将 B 侧维持在目标比例。</summary>
         KeepB,
     }
 
-    /// <summary>Immutable pump settings. Rate is items/second; target is a capacity fraction from zero to one.</summary>
+    /// <summary>不可变的泵设置。速率为物品/秒；目标为 0 到 1 之间的容量比例。</summary>
     public sealed class ValveOptions
     {
-        /// <summary>Whether the valve may request power and transfer items.</summary>
+        /// <summary>阀门是否可以请求电力并传输物品。</summary>
         public bool Enabled { get; }
 
-        /// <summary>Maximum transfer rate before scaling by available electrical power.</summary>
+        /// <summary>按可用电力缩放前的最大传输速率。</summary>
         public double ItemsPerSecond { get; }
 
-        /// <summary>Desired fill fraction of the selected side, from zero to one.</summary>
+        /// <summary>所选侧期望的填充比例，取值为 0 到 1。</summary>
         public double TargetFraction { get; }
 
-        /// <summary>The permitted transfer direction.</summary>
+        /// <summary>允许的传输方向。</summary>
         public FlowDirection Direction { get; }
 
-        /// <summary>The fill-level objective.</summary>
+        /// <summary>填充水平目标。</summary>
         public LevelControl Control { get; }
 
-        /// <summary>Constructs an immutable, validated set of pump settings.</summary>
-        /// <param name="enabled">Whether transfer is enabled.</param>
-        /// <param name="itemsPerSecond">Finite maximum rate in the inclusive range 0–1,000,000.</param>
-        /// <param name="targetFraction">Finite target fill fraction in the inclusive range 0–1.</param>
-        /// <param name="direction">Permitted transfer direction.</param>
-        /// <param name="control">Fill-level objective.</param>
-        /// <exception cref="ArgumentOutOfRangeException">A rate, fraction or enum value is outside its range.</exception>
+        /// <summary>构造一组不可变且经过校验的泵设置。</summary>
+        /// <param name="enabled">是否启用传输。</param>
+        /// <param name="itemsPerSecond">位于闭区间 0–1,000,000 内的有限最大速率。</param>
+        /// <param name="targetFraction">位于闭区间 0–1 内的有限目标填充比例。</param>
+        /// <param name="direction">允许的传输方向。</param>
+        /// <param name="control">填充水平目标。</param>
+        /// <exception cref="ArgumentOutOfRangeException">速率、比例或枚举值超出其取值范围。</exception>
         public ValveOptions(
             bool enabled = true,
             double itemsPerSecond = 60,

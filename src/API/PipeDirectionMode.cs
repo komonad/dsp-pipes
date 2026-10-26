@@ -1,12 +1,12 @@
 namespace FluidPipes.API
 {
-    /// <summary>The orientation policy used by construction and native connection slots.</summary>
+    /// <summary>建造与原生连接槽使用的方向策略。</summary>
     public enum PipeDirectionMode
     {
-        /// <summary>Connections are symmetric and construction has no flow arrows.</summary>
+        /// <summary>连接是对称的，建造时没有流向箭头。</summary>
         Undirected,
 
-        /// <summary>Connections retain native input/output orientation and directed path closure.</summary>
+        /// <summary>连接保留原生输入/输出方向及有向路径闭环。</summary>
         Directed,
     }
 }

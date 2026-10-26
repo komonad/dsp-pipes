@@ -306,7 +306,7 @@ namespace FluidPipes
                 .Where(c => c >= 1 && c <= 8)
                 .Distinct()
                 .ToArray();
-            // Native prototype tables reserve twelve indices; construction popups instantiate ten buttons.
+            // 原生原型表预留十二个索引；建造弹窗实例化十个按钮。
             var candidates = categories
                 .Select(c =>
                     Enumerable

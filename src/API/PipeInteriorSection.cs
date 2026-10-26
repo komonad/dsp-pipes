@@ -3,33 +3,33 @@ using UnityEngine;
 
 namespace FluidPipes.API
 {
-    /// <summary>The perimeter shape of a longitudinal interior member.</summary>
+    /// <summary>纵向内部构件的周界形状。</summary>
     public enum PipeInteriorSectionKind
     {
-        /// <summary>A circular section.</summary>
+        /// <summary>圆形截面。</summary>
         Circle,
 
-        /// <summary>An axis-aligned rectangle with rounded corners.</summary>
+        /// <summary>带圆角的轴对齐矩形。</summary>
         RoundedRectangle,
     }
 
-    /// <summary>Immutable member dimensions normalized by the outer pipe radius.</summary>
-    /// <remarks>Surface U follows normalized distance around the perimeter, including rounded corner arcs. The seam duplicates the same position at U = 0 and U = 1. Longitudinal V follows the appearance's texture-coordinate mapping.</remarks>
+    /// <summary>按外管壁半径归一化的不可变构件尺寸。</summary>
+    /// <remarks>表面 U 沿周界的归一化距离，包括圆角弧段。接缝在 U = 0 和 U = 1 处复制同一位置。纵向 V 遵循外观的纹理坐标映射。</remarks>
     public sealed class PipeInteriorSection
     {
-        /// <summary>The perimeter shape.</summary>
+        /// <summary>周界形状。</summary>
         public PipeInteriorSectionKind Kind { get; }
 
-        /// <summary>The full lateral width divided by the outer pipe radius.</summary>
+        /// <summary>横向全宽与外管壁半径之比。</summary>
         public float WidthFraction { get; }
 
-        /// <summary>The full radial height divided by the outer pipe radius.</summary>
+        /// <summary>径向全高与外管壁半径之比。</summary>
         public float HeightFraction { get; }
 
-        /// <summary>The corner-rounding radius divided by the outer pipe radius.</summary>
+        /// <summary>圆角半径与外管壁半径之比。</summary>
         public float BevelFraction { get; }
 
-        /// <summary>A radius enclosing the section, divided by the outer pipe radius.</summary>
+        /// <summary>包围截面的半径与外管壁半径之比。</summary>
         public float RadiusFraction { get; }
 
         private PipeInteriorSection(
@@ -47,9 +47,9 @@ namespace FluidPipes.API
             RadiusFraction = radius;
         }
 
-        /// <summary>Defines a circular member section.</summary>
-        /// <param name="radiusFraction">Radius divided by the outer pipe radius, from 0.01 through 0.85.</param>
-        /// <exception cref="ArgumentOutOfRangeException">The radius falls outside the finite supported interval.</exception>
+        /// <summary>定义圆形构件截面。</summary>
+        /// <param name="radiusFraction">半径与外管壁半径之比，范围为 0.01 到 0.85。</param>
+        /// <exception cref="ArgumentOutOfRangeException">半径超出有限的支持区间。</exception>
         public static PipeInteriorSection Circle(float radiusFraction)
         {
             RequireRange(radiusFraction, 0.01f, 0.85f, nameof(radiusFraction));
@@ -62,11 +62,11 @@ namespace FluidPipes.API
             );
         }
 
-        /// <summary>Defines a rectangular member with circular corner rounding.</summary>
-        /// <param name="widthFraction">Full lateral width divided by the outer pipe radius, from 0.02 through 1.7.</param>
-        /// <param name="heightFraction">Full radial height divided by the outer pipe radius, from 0.02 through 1.7.</param>
-        /// <param name="bevelFraction">Corner radius divided by the outer pipe radius, from zero through half the smaller side.</param>
-        /// <exception cref="ArgumentOutOfRangeException">A dimension falls outside its finite supported interval.</exception>
+        /// <summary>定义带圆形圆角的矩形构件。</summary>
+        /// <param name="widthFraction">横向全宽与外管壁半径之比，范围为 0.02 到 1.7。</param>
+        /// <param name="heightFraction">径向全高与外管壁半径之比，范围为 0.02 到 1.7。</param>
+        /// <param name="bevelFraction">圆角半径与外管壁半径之比，范围为 0 到较小边的一半。</param>
+        /// <exception cref="ArgumentOutOfRangeException">某个尺寸超出其有限的支持区间。</exception>
         public static PipeInteriorSection RoundedRectangle(
             float widthFraction,
             float heightFraction,

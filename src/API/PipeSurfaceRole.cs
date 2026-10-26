@@ -1,24 +1,24 @@
 namespace FluidPipes.API
 {
-    /// <summary>The surface receiving a procedural rendering effect.</summary>
+    /// <summary>接收程序化渲染效果的表面。</summary>
     public enum PipeSurfaceRole
     {
-        /// <summary>The outer wall.</summary>
+        /// <summary>外管壁。</summary>
         Wall,
 
-        /// <summary>The transparent interior wall.</summary>
+        /// <summary>透明内壁。</summary>
         InnerWall,
 
-        /// <summary>Opaque joints, retaining rings and internal metal members.</summary>
+        /// <summary>不透明接头、管箍和内部金属构件。</summary>
         Fittings,
 
-        /// <summary>The decorative internal conductor or beam.</summary>
+        /// <summary>装饰性内部导体或梁。</summary>
         Core,
 
-        /// <summary>The dark machine socket panel.</summary>
+        /// <summary>机器接口的深色面板。</summary>
         MachinePanel,
 
-        /// <summary>The machine socket casing.</summary>
+        /// <summary>机器接口外壳。</summary>
         MachineShell,
     }
 }

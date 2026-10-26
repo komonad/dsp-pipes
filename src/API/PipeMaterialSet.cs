@@ -5,8 +5,8 @@ using UnityEngine.Rendering;
 
 namespace FluidPipes.API
 {
-    /// <summary>Library-owned materials configured during one type's resource initialization.</summary>
-    /// <remarks>Texture and shader references remain owned by the extension. Configure these materials during the initialization callback; draw-time state belongs in the effect property block.</remarks>
+    /// <summary>在单个类型的资源初始化期间配置的库自有材质。</summary>
+    /// <remarks>纹理和着色器引用仍归扩展所有。在初始化回调期间配置这些材质；绘制时状态应放入效果属性块。</remarks>
     public sealed class PipeMaterialSet
     {
         private readonly Dictionary<PipeSurfaceRole, Material> materials =
@@ -16,19 +16,19 @@ namespace FluidPipes.API
         private bool configuring;
         internal PipeWallMode WallMode => mode;
 
-        /// <summary>The outer wall material.</summary>
+        /// <summary>外管壁材质。</summary>
         public Material Wall => materials[PipeSurfaceRole.Wall];
 
-        /// <summary>The joint, retaining-ring and internal structural-member material.</summary>
+        /// <summary>接头、管箍和内部结构构件所用的材质。</summary>
         public Material Fittings => materials[PipeSurfaceRole.Fittings];
 
-        /// <summary>The optional decorative conductor material.</summary>
+        /// <summary>可选的装饰性导体材质。</summary>
         public Material Core => materials[PipeSurfaceRole.Core];
 
-        /// <summary>The dark socket panel material.</summary>
+        /// <summary>机器接口深色面板材质。</summary>
         public Material MachinePanel => materials[PipeSurfaceRole.MachinePanel];
 
-        /// <summary>The socket casing material.</summary>
+        /// <summary>机器接口外壳材质。</summary>
         public Material MachineShell => materials[PipeSurfaceRole.MachineShell];
 
         internal PipeMaterialSet(PipeAppearance appearance)
@@ -77,12 +77,12 @@ namespace FluidPipes.API
 
         private Material Copy(Material material) => owned ? new Material(material) : material;
 
-        /// <summary>Copies a supplied material into a configurable surface role.</summary>
-        /// <param name="role">The target role; the interior wall is derived automatically.</param>
-        /// <param name="source">A material whose textures and shader remain valid throughout rendering.</param>
-        /// <exception cref="InvalidOperationException">The method is called outside the material configuration callback.</exception>
-        /// <exception cref="ArgumentNullException">The source material is null.</exception>
-        /// <exception cref="ArgumentOutOfRangeException">The role is invalid or refers to the derived interior wall.</exception>
+        /// <summary>将提供的材质复制到可配置的表面角色。</summary>
+        /// <param name="role">目标角色；内壁由系统自动派生。</param>
+        /// <param name="source">其纹理和着色器在整个渲染期间保持有效的材质。</param>
+        /// <exception cref="InvalidOperationException">在材质配置回调之外调用此方法。</exception>
+        /// <exception cref="ArgumentNullException">源材质为 null。</exception>
+        /// <exception cref="ArgumentOutOfRangeException">角色无效，或指向派生的内壁。</exception>
         public void SetMaterial(PipeSurfaceRole role, Material source)
         {
             if (!configuring)

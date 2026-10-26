@@ -34,7 +34,7 @@ namespace FluidPipes
     {
         public const int SegmentCapacity = 10;
 
-        // Graph format 1 includes saves written with a capacity of 100 per node.
+        // 图格式 1 包含按每节点 100 容量写入的存档。
         private const int HistoricalSegmentCapacity = 100;
 
         private sealed class Network
@@ -292,7 +292,7 @@ namespace FluidPipes
             node.Net = part;
         }
 
-        // Integer remainders stay in later components; total count and proliferation points are conserved.
+        // 整数余量保留在后续分量中；总数量与增产点守恒。
         private void Repartition(Network old)
         {
             networks.Remove(old);
@@ -534,7 +534,7 @@ namespace FluidPipes
                 var network = node.Net;
                 lock (network.Sync)
                 {
-                    // Imported surplus can remain or decrease while nominal capacity controls new stock.
+                    // 导入的超容量库存可以保留或减少，新增库存受标称容量限制。
                     if (
                         count < 0
                         || count

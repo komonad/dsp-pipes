@@ -49,7 +49,7 @@ namespace CopperPipes
                     );
                 }
 
-                // The native icon atlas copies a readable 80-pixel ARGB32 texture region.
+                // 原生图标图集复制可读的 80 像素 ARGB32 纹理区域。
                 texture = new Texture2D(IconSize, IconSize, TextureFormat.ARGB32, false)
                 {
                     name = "CopperPipes.ItemIcon",
@@ -111,7 +111,7 @@ namespace CopperPipes
                     }
                     if (alpha > 0)
                     {
-                        // Premultiplied averaging preserves the silhouette at transparent edges.
+                        // 预乘平均可在透明边缘保留轮廓。
                         scaledPixels[targetRow * IconSize + targetColumn] = new Color32(
                             (byte)(red / alpha),
                             (byte)(green / alpha),

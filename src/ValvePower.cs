@@ -8,7 +8,7 @@ namespace FluidPipes
     [HarmonyPatch]
     internal static class ValvePower
     {
-        // Native power values are joules per simulation tick at 60 ticks per second.
+        // 原生电力值以焦耳每模拟 tick 计，每秒 60 tick。
         public const long WorkEnergyPerTick = 1667;
         public const long IdleEnergyPerTick = 0;
         private static ConditionalWeakTable<PlanetFactory, List<int>> valves =

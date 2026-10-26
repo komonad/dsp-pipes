@@ -1,12 +1,12 @@
 namespace FluidPipes.API
 {
-    /// <summary>The simulation provided by a procedural connection type.</summary>
+    /// <summary>程序化连接类型提供的模拟。</summary>
     public enum PipeBehavior
     {
-        /// <summary>Connected nodes participate in the shared item inventory.</summary>
+        /// <summary>连通节点参与共享物品库存。</summary>
         SharedInventory,
 
-        /// <summary>Nodes provide construction and topology for an external simulation.</summary>
+        /// <summary>节点为外部模拟提供建造与拓扑。</summary>
         Structure,
     }
 }

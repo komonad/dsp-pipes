@@ -38,7 +38,7 @@ namespace FluidPipes
                 float multiplier = native.GetFloat("_AlbedoMultiplier");
                 for (int index = 0; index < pixels.Length; index++)
                 {
-                    // Native inserter albedo alpha encodes the grade-paint mask.
+                    // 原生分拣器反照率的 alpha 通道编码等级涂装遮罩。
                     float mask = Mathf.Clamp01((pixels[index].a - 0.1f) * 1.25f);
                     Color albedo =
                         pixels[index].linear * Color.Lerp(Color.white, tint, mask) * multiplier;
@@ -83,7 +83,7 @@ namespace FluidPipes
             }
 
             var triangles = source.GetTriangles(0);
-            // Native vertex colors encode endpoint, moving parts and facility-only casing.
+            // 原生顶点颜色编码端点、运动部件与仅设施外壳。
             Func<int, bool> fixedPart = i =>
                 colors[i].g == 0
                 && (
@@ -126,14 +126,14 @@ namespace FluidPipes
             var frames = new Vector4[selected.Count];
             var texcoords = new Vector2[selected.Count];
             var tags = new Color32[selected.Count];
-            // Static source-endpoint tags select the closed shutter at its authored transform.
+            // 静态源端点标记在既定变换位置选用闭合挡板。
             for (int index3 = 0; index3 < selected.Count; index3++)
             {
                 int n = selected[index3];
                 var p = vertices[n];
                 var normal = normals[n];
                 var tangent = tangents[n];
-                // The native destination endpoint faces into the facility; expose a canonical outward frame.
+                // 原生目标端点朝向设施内部；对外暴露规范的外向坐标系。
                 points[index3] = machine ? new Vector3(-p.x, p.y, -p.z) : p;
                 directions[index3] = machine ? new Vector3(-normal.x, normal.y, -normal.z) : normal;
                 frames[index3] = machine

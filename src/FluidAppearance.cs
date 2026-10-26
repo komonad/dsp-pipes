@@ -40,7 +40,7 @@ namespace FluidPipes
                     icons.itemDescArr[offset + 2]
                 );
             }
-            // The native tank shader reads IconDesc.reserved0 and applies this sRGB conversion and exposure.
+            // 原生储液罐着色器读取 IconDesc.reserved0，并应用此 sRGB 转换与曝光。
             return new Color(
                 LinearChannel(color.r),
                 LinearChannel(color.g),

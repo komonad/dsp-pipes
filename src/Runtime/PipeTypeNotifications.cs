@@ -53,7 +53,7 @@ namespace FluidPipes
             }
             try
             {
-                // Callback mutations enter the next batch, preserving the completed batch's iteration.
+                // 回调中的变更进入下一批次，以保持已完成批次的迭代。
                 foreach (var change in completedChanges)
                 {
                     if (cancelDispatch)

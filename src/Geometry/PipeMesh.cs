@@ -10,7 +10,7 @@ namespace FluidPipes
     {
         public const float Radius = 0.32f;
 
-        // Default transport centerline offset above the native entity anchor.
+        // 默认运输中心线相对原生实体锚点的高度偏移。
         internal const float CenterHeight = 0.34f;
         internal const int MachinePanelMaterial = 2;
         internal const int MachineShellMaterial = 3;
@@ -501,7 +501,7 @@ namespace FluidPipes
                 {
                     firstTangent = tangent;
                 }
-                // Shared endpoint frames keep adjoining transparent sections on the same ring plane and phase.
+                // 共享端面框架使相邻透明段位于同一环面与相位。
                 bool shared = frameUps != null && frameUps[row].sqrMagnitude > 0.0000001f;
                 Vector3 side = FrameSide(
                     tangent,
@@ -769,7 +769,7 @@ namespace FluidPipes
                             );
                         }
                     }
-                    // Fade the blend at ray origins so coincident round ends retain the tube radius.
+                    // 在射线起点渐隐混合，使重合的圆形端面保持管道半径。
                     float blend = Radius * 0.5f * Mathf.SmoothStep(0, 1, Mathf.Clamp01(t / Radius));
                     if (blend < 0.000001f)
                     {
@@ -935,7 +935,7 @@ namespace FluidPipes
             }
             if (corner)
             {
-                // Inset convex junctions and preserve branch tangents at the adjoining tube planes.
+                // 内缩凸形交汇处，并在相邻管段平面保持分支切线。
                 field.Hub = center + inward * Mathf.Min(radius * 0.9f, shortest * 0.5f);
                 field.Curves = new Vector3[ends.Count][];
                 field.SampleDirections = new Vector3[ends.Count];
@@ -1236,7 +1236,7 @@ namespace FluidPipes
             var directions = new List<Vector3>(normals);
             var coordinates = new List<Vector2>(uvs);
             var opaque = new List<int>[indices.Length - 1];
-            // Opaque fittings require inward faces when viewed through adjoining glass tubes.
+            // 透过相邻玻璃管观察时，不透明接头需要朝向内侧的面。
             for (int material = 1; material < indices.Length; material++)
             {
                 opaque[material - 1] = new List<int>(indices[material]);

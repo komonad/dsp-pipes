@@ -127,7 +127,7 @@ namespace FluidPipes.Integration.Belts
 
         private static Quaternion SelectRotation(Vector3 position, float yaw, BuildPreview preview)
         {
-            // Native path previews start at identity; initialized poses preserve the planned tangent.
+            // 原生路径预览以单位变换开始；初始化姿态保留规划切线。
             return PipeTypeRegistry.IsItem(preview.item?.ID) && HasPlannedRotation(preview.lrot)
                 ? preview.lrot
                 : Maths.SphericalRotation(position, yaw);

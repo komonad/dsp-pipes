@@ -126,7 +126,7 @@ namespace FluidPipes
             description.lodCount = 1;
             description.lodMeshes = new[] { mesh };
             description.lodMaterials = new[] { materials };
-            // Native culling uploads all four distance uniforms for every LOD count.
+            // 原生剔除会为每种 LOD 数量上传全部四个距离 uniform 参数。
             description.lodDistances = new[] { 1000f, 1000f, 1000f, 1000f };
             description.lodBlueprintMaterials = new[] { new Material[materials.Length] };
             description.lodSubmeshIgnores = new[] { new bool[materials.Length] };

@@ -42,7 +42,7 @@ namespace FluidPipes.Integration.Reservoirs
             controls.layer = window.gameObject.layer;
             var controlsTransform = (RectTransform)controls.transform;
             controlsTransform.SetParent(window.transform, false);
-            // Root offsets include the native frame artwork's transparent outer gutter.
+            // 根节点偏移包含原生框架贴图外侧的透明留白。
             NativePipeUi.Layout(controlsTransform, originalSize.y + 8, 112, 32);
             inventoryLabel = NativePipeUi.Label(controls.transform, 0, 42, "", 14);
             NativePipeUi.Layout((RectTransform)inventoryLabel.transform, 0, 42, 0);

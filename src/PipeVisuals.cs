@@ -305,7 +305,7 @@ namespace FluidPipes
                     };
                     machineShell.SetFloat("_Metallic", 0);
                     machineShell.SetFloat("_Glossiness", 0.46f);
-                    // Ambient fill preserves dielectric color within recessed machine sockets.
+                    // 环境补光在凹陷的机器插口中保留介电材质颜色。
                     machineShell.EnableKeyword("_EMISSION");
                     machineShell.SetColor("_EmissionColor", new Color(0.20f, 0.22f, 0.24f));
                     if (body.HasProperty("_Metallic"))
@@ -444,7 +444,7 @@ namespace FluidPipes
             }
             steelEnvironment.Apply(true, true);
             steelLighting = new MaterialPropertyBlock();
-            // Pipe draws receive the approximate sky reflection through a material property block.
+            // 管道绘制通过材质属性块获得近似的天空反射。
             steelLighting.SetTexture("unity_SpecCube0", steelEnvironment);
             steelLighting.SetTexture("unity_SpecCube1", steelEnvironment);
             steelLighting.SetVector("unity_SpecCube0_HDR", new Vector4(1, 1, 0, 0));
@@ -1548,7 +1548,7 @@ namespace FluidPipes
         [HarmonyPrefix, HarmonyPatch(typeof(CargoTraffic), nameof(CargoTraffic.SetBeltState))]
         public static bool State(CargoTraffic __instance, int beltId)
         {
-            // PipeVisuals owns the rendering of procedural pipe meshes.
+            // PipeVisuals 负责程序化管道网格的渲染。
             return !PipeRuntime.IsPipe(__instance, beltId);
         }
 

@@ -2,43 +2,43 @@ using System;
 
 namespace FluidPipes.API
 {
-    /// <summary>A connection type bound to an independently registered game item.</summary>
+    /// <summary>绑定到独立注册的游戏物品的连接类型。</summary>
     public sealed class PipeTypeDefinition
     {
-        /// <summary>The local stable type name.</summary>
+        /// <summary>局部稳定类型名。</summary>
         public string LocalName { get; }
 
-        /// <summary>The game item prototype registered by its owner.</summary>
+        /// <summary>由拥有者注册的游戏物品原型。</summary>
         public ItemProto Prototype { get; }
 
-        /// <summary>The simulation category.</summary>
+        /// <summary>模拟类别。</summary>
         public PipeBehavior Behavior { get; }
 
-        /// <summary>The construction and connection orientation policy.</summary>
+        /// <summary>建造与连接方向策略。</summary>
         public PipeDirectionMode DirectionMode { get; }
 
-        /// <summary>The exact connection-family key; compatible behavior and direction modes within a family may connect.</summary>
+        /// <summary>精确的连接家族键；同一家族内兼容的行为与方向模式可以连接。</summary>
         public string ConnectionFamily { get; }
 
-        /// <summary>The immutable surface settings.</summary>
+        /// <summary>不可变的表面设置。</summary>
         public PipeAppearance Appearance { get; }
 
-        /// <summary>The immutable world-space dimensions used by rendering and connection geometry.</summary>
+        /// <summary>供渲染与连接几何使用的不可变世界空间尺寸。</summary>
         public PipeGeometryProfile Geometry { get; }
 
         internal Func<PlanetFactory, int, int> BatchGroup { get; }
 
-        /// <summary>Defines an item-backed procedural connection with the standard geometry through the seven-parameter binary interface.</summary>
-        /// <param name="localName">A stable local identifier containing lower-case ASCII letters, digits, dot, underscore or hyphen.</param>
-        /// <param name="prototype">The independently registered item prototype with a positive ID.</param>
-        /// <param name="appearance">Surface settings; null inherits the default appearance. Open surfaces require a structural interior.</param>
-        /// <param name="behavior">Shared inventory or externally simulated structural connections.</param>
-        /// <param name="connectionFamily">An exact family key; null uses the common fluid family or the type's structural key.</param>
-        /// <param name="batchGroup">A pure main-thread function returning a stable rendering group for each entity; evaluated during geometry placement.</param>
-        /// <param name="directionMode">The connection orientation; shared inventories use symmetric connections.</param>
-        /// <exception cref="ArgumentNullException">The prototype is null.</exception>
-        /// <exception cref="ArgumentOutOfRangeException">A prototype ID, behavior or direction mode is invalid.</exception>
-        /// <exception cref="ArgumentException">The local name or combination of behavior, direction and appearance is invalid.</exception>
+        /// <summary>通过七参数二进制接口以标准几何定义由物品承载的程序化连接。</summary>
+        /// <param name="localName">包含小写 ASCII 字母、数字、点、下划线或连字符的稳定局部标识符。</param>
+        /// <param name="prototype">由拥有者独立注册、具有正数 ID 的物品原型。</param>
+        /// <param name="appearance">表面设置；为 null 时继承默认外观。开放表面要求结构内芯。</param>
+        /// <param name="behavior">共享库存或外部模拟的结构连接。</param>
+        /// <param name="connectionFamily">精确的家族键；为 null 时使用通用流体家族或该类型的结构键。</param>
+        /// <param name="batchGroup">纯主线程函数，为每个实体返回稳定的渲染分组；在几何放置期间求值。</param>
+        /// <param name="directionMode">连接方向；共享库存使用对称连接。</param>
+        /// <exception cref="ArgumentNullException">原型为 null。</exception>
+        /// <exception cref="ArgumentOutOfRangeException">原型 ID、行为或方向模式无效。</exception>
+        /// <exception cref="ArgumentException">局部名称无效，或行为、方向与外观的组合无效。</exception>
         public PipeTypeDefinition(
             string localName,
             ItemProto prototype,
@@ -59,18 +59,18 @@ namespace FluidPipes.API
                 null
             ) { }
 
-        /// <summary>Defines an item-backed procedural connection.</summary>
-        /// <param name="localName">A stable local identifier containing lower-case ASCII letters, digits, dot, underscore or hyphen.</param>
-        /// <param name="prototype">The independently registered item prototype with a positive ID.</param>
-        /// <param name="appearance">Surface settings; null inherits the default appearance. Open surfaces require a structural interior. Undirected interiors match members under lateral X reversal while preserving radial Y.</param>
-        /// <param name="behavior">Shared inventory or externally simulated structural connections.</param>
-        /// <param name="connectionFamily">An exact family key; null uses the common fluid family or the type's structural key.</param>
-        /// <param name="batchGroup">A pure main-thread function returning a stable rendering group for each entity; evaluated during geometry placement.</param>
-        /// <param name="directionMode">The connection orientation; shared inventories use symmetric connections.</param>
-        /// <param name="geometry">Pipe dimensions; null uses <see cref="PipeGeometryProfile.Default"/>.</param>
-        /// <exception cref="ArgumentNullException">The prototype is null.</exception>
-        /// <exception cref="ArgumentOutOfRangeException">A prototype ID, behavior or direction mode is invalid.</exception>
-        /// <exception cref="ArgumentException">The local name or combination of behavior, direction and appearance is invalid.</exception>
+        /// <summary>定义由物品承载的程序化连接。</summary>
+        /// <param name="localName">包含小写 ASCII 字母、数字、点、下划线或连字符的稳定局部标识符。</param>
+        /// <param name="prototype">由拥有者独立注册、具有正数 ID 的物品原型。</param>
+        /// <param name="appearance">表面设置；为 null 时继承默认外观。开放表面要求结构内芯。无向内芯在横向 X 反转下逐一匹配构件，同时保持径向 Y。</param>
+        /// <param name="behavior">共享库存或外部模拟的结构连接。</param>
+        /// <param name="connectionFamily">精确的家族键；为 null 时使用通用流体家族或该类型的结构键。</param>
+        /// <param name="batchGroup">纯主线程函数，为每个实体返回稳定的渲染分组；在几何放置期间求值。</param>
+        /// <param name="directionMode">连接方向；共享库存使用对称连接。</param>
+        /// <param name="geometry">管道尺寸；为 null 时使用 <see cref="PipeGeometryProfile.Default"/>。</param>
+        /// <exception cref="ArgumentNullException">原型为 null。</exception>
+        /// <exception cref="ArgumentOutOfRangeException">原型 ID、行为或方向模式无效。</exception>
+        /// <exception cref="ArgumentException">局部名称无效，或行为、方向与外观的组合无效。</exception>
         public PipeTypeDefinition(
             string localName,
             ItemProto prototype,

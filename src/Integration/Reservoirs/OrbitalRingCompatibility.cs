@@ -118,7 +118,7 @@ namespace FluidPipes.Integration.Reservoirs
                     sources.Add(tank.id, cadence);
                 }
                 bool skip = cadence.SkipNext;
-                // Native tanks attempt one insertion per tick; a blue belt carries 30 items/s.
+                // 原生储液罐每 tick 尝试一次插入；蓝色传送带每秒运送 30 个物品。
                 cadence.SkipNext = !skip;
                 if (skip)
                 {

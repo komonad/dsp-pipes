@@ -22,7 +22,7 @@ namespace FluidPipes
             Initialize(factory);
             var node = GetNodeGeometry(factory, entityId);
             var shape = node.Shape;
-            // Native inserter anchors follow cargo-path samples; the clamp follows rendered geometry.
+            // 原生分拣器锚点跟随货运路径采样点；管箍跟随渲染几何。
             var localQuery = nearPosition - shape.Position;
             var dimensions = PipeTypeRegistry.Geometry(node.ItemId);
             float closestDistance = float.MaxValue;
@@ -138,7 +138,7 @@ namespace FluidPipes
             float distance = (query - point).sqrMagnitude;
             Vector3 direction = Vector3.Lerp(beginTangent, endTangent, fraction).normalized;
             float alignment = Mathf.Abs(Vector3.Dot(direction, preferredTangent));
-            // Equal-distance branches use the saved path tangent to keep the attachment stable.
+            // 等距分支使用已保存的路径切线，以保持吸附稳定。
             if (
                 distance < closestDistance - 0.0000001f
                 || Mathf.Abs(distance - closestDistance) <= 0.0000001f

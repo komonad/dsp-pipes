@@ -135,7 +135,7 @@ namespace FluidPipes
             Matrix4x4 transform = Matrix4x4.Translate(node.Position);
             for (int submesh = 0; submesh < node.Mesh.subMeshCount; submesh++)
             {
-                // The outer wall and opaque fittings define the node silhouette.
+                // 外壁与不透明接头构成节点轮廓。
                 if (submesh != 2)
                 {
                     commands.DrawMesh(node.Mesh, transform, mask, submesh);

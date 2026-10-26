@@ -628,7 +628,7 @@ namespace FluidPipes
             int assemblerId = factory.entityPool[machineId].assemblerId;
             uint machineTarget = (uint)EFactoryIOTargetType.Assembler | (uint)assemblerId;
             ref var assembler = ref factory.factorySystem.assemblerPool[assemblerId];
-            // The native APIs transfer bytes; a bounded batch keeps each endpoint's tick cost finite.
+            // 原生 API 以字节为单位传输；有界批量使每个接口的每 tick 开销保持有限。
             for (int transferred = 0; transferred < byte.MaxValue; transferred++)
             {
                 var inventory = PipePools.Query(state.Graph, pipeId);

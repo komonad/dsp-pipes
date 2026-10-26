@@ -2,30 +2,30 @@ using System;
 
 namespace FluidPipes.API
 {
-    /// <summary>Immutable dimensions for a procedural pipe type, expressed in Unity world units.</summary>
+    /// <summary>程序化管道类型的不可变尺寸，以 Unity 世界单位表示。</summary>
     public sealed class PipeGeometryProfile
     {
-        /// <summary>The standard pipe dimensions, shared by types that omit a geometry profile.</summary>
+        /// <summary>标准管道尺寸，供省略几何配置的类型共享。</summary>
         public static PipeGeometryProfile Default { get; } = new PipeGeometryProfile();
 
-        /// <summary>The outer wall radius in world units.</summary>
+        /// <summary>外管壁半径，单位为世界单位。</summary>
         public float Radius { get; }
 
-        /// <summary>The radial centerline offset from the native entity position, in world units.</summary>
+        /// <summary>从原生实体位置沿径向到中心线的偏移，单位为世界单位。</summary>
         public float CenterHeight { get; }
 
-        /// <summary>The multiplier applied to retaining-ring thickness and axial depth; fitting bores follow the wall radius.</summary>
+        /// <summary>施加于管箍厚度和轴向深度的倍率；接头内孔随管壁半径适配。</summary>
         public float FittingScale { get; }
 
-        /// <summary>The axial width of a central support ring on straight segments and endpoints, in world units. Zero omits the ring.</summary>
+        /// <summary>直段和端点中部支撑环的轴向宽度，单位为世界单位。零表示省略支撑环。</summary>
         public float SupportRingWidth { get; }
 
-        /// <summary>Defines pipe, fitting and optional support-ring dimensions.</summary>
-        /// <param name="radius">Outer wall radius, from 0.08 through 1.2 world units.</param>
-        /// <param name="centerHeight">Radial centerline offset from the native entity position, from zero through 2 world units.</param>
-        /// <param name="fittingScale">Retaining-ring thickness and depth multiplier, from 0.75 through 1.5.</param>
-        /// <param name="supportRingWidth">Central support-ring width, from zero through the outer wall radius. Zero omits the ring.</param>
-        /// <exception cref="ArgumentOutOfRangeException">A dimension is nonfinite or outside its supported interval.</exception>
+        /// <summary>定义管道、接头和可选支撑环的尺寸。</summary>
+        /// <param name="radius">外管壁半径，范围为 0.08 到 1.2 世界单位。</param>
+        /// <param name="centerHeight">相对原生实体位置的径向中心线偏移，范围为 0 到 2 世界单位。</param>
+        /// <param name="fittingScale">管箍厚度和深度倍率，范围为 0.75 到 1.5。</param>
+        /// <param name="supportRingWidth">中部支撑环宽度，范围为 0 到外管壁半径。零表示省略支撑环。</param>
+        /// <exception cref="ArgumentOutOfRangeException">某个尺寸为非有限值或超出其支持区间。</exception>
         public PipeGeometryProfile(
             float radius = 0.32f,
             float centerHeight = 0.34f,

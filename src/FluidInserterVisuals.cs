@@ -461,7 +461,7 @@ namespace FluidPipes
             if (arrows[grade] == null)
             {
                 var nativeArrow = LDB.items.Select(2010 + grade).prefabDesc.lodMaterials[0][1];
-                // Direction markers retain their native grade color under factory shadows.
+                // 工厂阴影下，方向标记保留其原生等级颜色。
                 arrows[grade] = new Material(Shader.Find("Unlit/Color"))
                 {
                     name = "FluidPipes.InserterArrow" + grade,
@@ -649,7 +649,7 @@ namespace FluidPipes
             {
                 return;
             }
-            // Keep native instance ownership and collision data while clearing its visible GPU pose.
+            // 清除可见 GPU 姿态的同时保留原生实例归属与碰撞数据。
             renderer.instPool[index] = new GPUOBJECT
             {
                 objId = renderer.instPool[index].objId,

@@ -77,7 +77,7 @@ namespace FluidPipes
                                 blue += p.b * p.a;
                             }
                         }
-                        // Alpha-weighted reduction preserves glass edges against transparent pixels.
+                        // 按 alpha 加权缩放可在透明像素背景下保留玻璃边缘。
                         if (alpha > 0)
                         {
                             scaled[y * Size + x] = new Color32(
@@ -89,7 +89,7 @@ namespace FluidPipes
                         }
                     }
                 }
-                // The native icon atlas copies an 80-pixel ARGB32 texture region per sprite.
+                // 原生图标图集为每个 sprite 复制 80 像素的 ARGB32 纹理区域。
                 var texture = new Texture2D(Size, Size, TextureFormat.ARGB32, false)
                 {
                     name = "FluidPipes." + name + "ItemIcon",

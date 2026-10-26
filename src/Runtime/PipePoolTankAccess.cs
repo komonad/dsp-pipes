@@ -40,7 +40,7 @@ namespace FluidPipes
             }
             lock (state.Sync)
             {
-                // Native tank menus and logistics mutate their own fields between shared-space updates.
+                // 原生储液罐菜单与物流会在共享空间更新之间修改自身字段。
                 tank.Pool.Measure();
                 inventory = View(state.Graph, tank.Pool.Representative);
                 return true;

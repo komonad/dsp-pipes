@@ -169,7 +169,7 @@ namespace FluidPipes
                 route[0] = begin;
                 route[count - 1] = end;
             }
-            // Height interpolation follows the horizontal route; subdivision bounds native node spacing.
+            // 高度插值沿水平路线进行；细分受原生节点间距约束。
             int needed = 1;
             for (int index3 = 1; index3 < count; index3++)
             {

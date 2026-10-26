@@ -4,58 +4,58 @@ using UnityEngine;
 
 namespace FluidPipes.API
 {
-    /// <summary>Registers item-backed procedural connections and exposes their topology.</summary>
-    /// <remarks>Registration and registration-stage queries use the Unity main thread. Registered definitions remain fixed after prototype initialization. Live factory queries require the main thread or exclusive access to that factory. Entity IDs can be reused after removal; callers maintain cache lifetimes across factory and topology changes.</remarks>
+    /// <summary>注册由物品承载的程序化连接，并公开其拓扑。</summary>
+    /// <remarks>注册及注册阶段的查询使用 Unity 主线程。注册的定义在原型初始化后保持固定。实时工厂查询要求主线程或对相应工厂的独占访问。实体 ID 可在拆除后复用；调用方需在工厂与拓扑变化之间维护缓存生命周期。</remarks>
     public static class PipeTypes
     {
-        /// <summary>Raised on a subsequent main-thread update after completed connection mutations, once per affected entity per batch. The entity may have been removed; surviving neighbors are included.</summary>
+        /// <summary>在连接改动完成后的下一次主线程更新中触发，每批每个受影响实体一次。实体可能已被拆除；仍存在的相邻节点也会包含在内。</summary>
         public static event Action<PlanetFactory, int> ConnectionsChanged
         {
             add { PipeTypeNotifications.ConnectionsChanged += value; }
             remove { PipeTypeNotifications.ConnectionsChanged -= value; }
         }
 
-        /// <summary>Creates an independent draft from the initialized base pipe template.</summary>
-        /// <remarks>The template is prepared during the library's LDBTool pre-add callback, including when built-in content is disabled. The caller owns registration of the returned draft.</remarks>
-        /// <param name="itemId">The caller's positive item ID.</param>
-        /// <param name="nameKey">The localization key for its name.</param>
-        /// <param name="descriptionKey">The localization key for its description.</param>
-        /// <returns>A draft to register with LDBTool during its pre-add phase.</returns>
-        /// <exception cref="ArgumentOutOfRangeException">The item ID is zero or negative.</exception>
-        /// <exception cref="ArgumentException">A localization key is empty.</exception>
-        /// <exception cref="InvalidOperationException">The registration phase, thread or base template is unavailable.</exception>
+        /// <summary>从已初始化的基础管道模板创建独立草稿。</summary>
+        /// <remarks>模板在库的 LDBTool pre-add 回调中准备，禁用内置内容时同样如此。返回草稿的注册由调用方负责。</remarks>
+        /// <param name="itemId">调用方的正数物品 ID。</param>
+        /// <param name="nameKey">其名称的本地化键。</param>
+        /// <param name="descriptionKey">其描述的本地化键。</param>
+        /// <returns>供在 LDBTool 的 pre-add 阶段注册的草稿。</returns>
+        /// <exception cref="ArgumentOutOfRangeException">物品 ID 为零或负数。</exception>
+        /// <exception cref="ArgumentException">某个本地化键为空。</exception>
+        /// <exception cref="InvalidOperationException">注册阶段、线程或基础模板不可用。</exception>
         public static ItemProto CreateItem(int itemId, string nameKey, string descriptionKey) =>
             PipeTypeRegistry.CreateItem(itemId, nameKey, descriptionKey);
 
-        /// <summary>Assigns an externally owned item icon during prototype registration.</summary>
-        /// <remarks>The sprite and its texture remain valid throughout the database and icon-atlas lifetime. Recipes with an empty IconPath inherit their result item's icon. Registration uses the Unity main thread.</remarks>
-        /// <param name="prototype">An independently owned draft with a positive item ID.</param>
-        /// <param name="icon">A full 80-by-80 sprite backed by a readable, unpacked 80-by-80 ARGB32 texture.</param>
-        /// <exception cref="ArgumentNullException">The item or sprite is null or the sprite has been destroyed.</exception>
-        /// <exception cref="ArgumentOutOfRangeException">The item ID is zero or negative.</exception>
-        /// <exception cref="ArgumentException">The sprite rectangle or texture differs from the native icon-atlas requirements.</exception>
-        /// <exception cref="InvalidOperationException">Registration is closed or the call uses another thread.</exception>
+        /// <summary>在原型注册期间指定由外部持有的物品图标。</summary>
+        /// <remarks>精灵及其纹理在数据库与图标图集的整个生命周期内保持有效。IconPath 为空的配方继承其产出物品的图标。注册使用 Unity 主线程。</remarks>
+        /// <param name="prototype">独立持有且具有正数物品 ID 的草稿。</param>
+        /// <param name="icon">由可读、未压缩的 80×80 ARGB32 纹理支撑的完整 80×80 精灵。</param>
+        /// <exception cref="ArgumentNullException">物品或精灵为 null，或精灵已被销毁。</exception>
+        /// <exception cref="ArgumentOutOfRangeException">物品 ID 为零或负数。</exception>
+        /// <exception cref="ArgumentException">精灵矩形或纹理与原生图标图集的要求不符。</exception>
+        /// <exception cref="InvalidOperationException">注册已关闭或调用使用了其它线程。</exception>
         public static void SetItemIcon(ItemProto prototype, Sprite icon) =>
             PipeItemIcons.Set(prototype, icon);
 
-        /// <summary>Registers a type on the main thread before the prototype database is sealed.</summary>
-        /// <param name="ownerGuid">The owning BepInEx plugin GUID.</param>
-        /// <param name="definition">An item prototype and immutable connection settings.</param>
-        /// <exception cref="ArgumentNullException">The definition is null.</exception>
-        /// <exception cref="ArgumentException">The owner GUID is empty.</exception>
-        /// <exception cref="InvalidOperationException">Registration is closed, uses another thread, or conflicts with an existing item or type key.</exception>
+        /// <summary>在原型数据库封闭之前于主线程注册类型。</summary>
+        /// <param name="ownerGuid">拥有者 BepInEx 插件的 GUID。</param>
+        /// <param name="definition">物品原型与不可变的连接设置。</param>
+        /// <exception cref="ArgumentNullException">定义为 null。</exception>
+        /// <exception cref="ArgumentException">拥有者 GUID 为空。</exception>
+        /// <exception cref="InvalidOperationException">注册已关闭、使用了其它线程，或与已有的物品或类型键冲突。</exception>
         public static void Register(string ownerGuid, PipeTypeDefinition definition) =>
             PipeTypeRegistry.Register(ownerGuid, definition);
 
-        /// <summary>Identifies a registered procedural connection item.</summary>
-        /// <param name="itemId">A game item ID.</param>
-        /// <returns>True for a registered type.</returns>
+        /// <summary>标识已注册的程序化连接物品。</summary>
+        /// <param name="itemId">游戏物品 ID。</param>
+        /// <returns>已注册类型返回 true。</returns>
         public static bool IsPipeItem(int itemId) => PipeTypeRegistry.Get(itemId) != null;
 
-        /// <summary>Queries a registered type by item ID.</summary>
-        /// <param name="itemId">A game item ID.</param>
-        /// <param name="type">A detached identity snapshot.</param>
-        /// <returns>True for a registered type.</returns>
+        /// <summary>按物品 ID 查询已注册类型。</summary>
+        /// <param name="itemId">游戏物品 ID。</param>
+        /// <param name="type">独立的标识快照。</param>
+        /// <returns>已注册类型返回 true。</returns>
         public static bool TryGet(int itemId, out PipeTypeInfo type)
         {
             var entry = PipeTypeRegistry.Get(itemId);
@@ -63,20 +63,20 @@ namespace FluidPipes.API
             return entry != null;
         }
 
-        /// <summary>Queries a registered type by qualified stable key.</summary>
-        /// <param name="typeKey">The plugin GUID, colon and local type name.</param>
-        /// <param name="type">A detached identity snapshot.</param>
-        /// <returns>True for a registered type.</returns>
+        /// <summary>按限定稳定键查询已注册类型。</summary>
+        /// <param name="typeKey">插件 GUID、冒号与局部类型名。</param>
+        /// <param name="type">独立的标识快照。</param>
+        /// <returns>已注册类型返回 true。</returns>
         public static bool TryGet(string typeKey, out PipeTypeInfo type)
         {
             var entry = PipeTypeRegistry.Get(typeKey);
             return TryGet(entry?.Definition.Prototype.ID ?? 0, out type);
         }
 
-        /// <summary>Reads completed direct neighbors on the main thread or under exclusive factory access.</summary>
-        /// <param name="factory">The owning factory.</param>
-        /// <param name="entityId">A completed procedural connection entity.</param>
-        /// <returns>A detached array of neighboring entity IDs, or an empty array for an invalid target.</returns>
+        /// <summary>在主线程或工厂独占访问下读取已完成的直接相邻节点。</summary>
+        /// <param name="factory">所属工厂。</param>
+        /// <param name="entityId">已完成的程序化连接实体。</param>
+        /// <returns>相邻实体 ID 的独立数组；目标无效时返回空数组。</returns>
         public static int[] GetNeighbors(PlanetFactory factory, int entityId)
         {
             if (!PipeApi.IsPipe(factory, entityId))
@@ -89,17 +89,17 @@ namespace FluidPipes.API
                 : NativeNeighbors(factory, entityId, null);
         }
 
-        /// <summary>Reads outgoing native connections, or all neighbors for an undirected type.</summary>
-        /// <param name="factory">The owning factory; use main-thread or exclusive factory access.</param>
-        /// <param name="entityId">A completed procedural connection entity.</param>
-        /// <returns>A detached array of reachable direct targets.</returns>
+        /// <summary>读取原生输出连接；无向类型返回全部邻居。</summary>
+        /// <param name="factory">所属工厂；使用主线程或工厂独占访问。</param>
+        /// <param name="entityId">已完成的程序化连接实体。</param>
+        /// <returns>可达直接目标的独立数组。</returns>
         public static int[] GetOutgoingNeighbors(PlanetFactory factory, int entityId) =>
             DirectedNeighbors(factory, entityId, true);
 
-        /// <summary>Reads incoming native connections, or all neighbors for an undirected type.</summary>
-        /// <param name="factory">The owning factory; use main-thread or exclusive factory access.</param>
-        /// <param name="entityId">A completed procedural connection entity.</param>
-        /// <returns>A detached array of direct source entities.</returns>
+        /// <summary>读取原生输入连接；无向类型返回全部邻居。</summary>
+        /// <param name="factory">所属工厂；使用主线程或工厂独占访问。</param>
+        /// <param name="entityId">已完成的程序化连接实体。</param>
+        /// <returns>直接来源实体的独立数组。</returns>
         public static int[] GetIncomingNeighbors(PlanetFactory factory, int entityId) =>
             DirectedNeighbors(factory, entityId, false);
 
@@ -140,10 +140,10 @@ namespace FluidPipes.API
             return neighbors.ToArray();
         }
 
-        /// <summary>Reads the connection component in O(component size) on the main thread or under exclusive factory access. Directed types return their weakly connected component.</summary>
-        /// <param name="factory">The owning factory.</param>
-        /// <param name="entityId">A completed procedural connection entity.</param>
-        /// <returns>A detached array of component entity IDs, or an empty array for an invalid target.</returns>
+        /// <summary>在主线程或工厂独占访问下以 O(分量大小) 的开销读取连接分量。有向类型返回其弱连通分量。</summary>
+        /// <param name="factory">所属工厂。</param>
+        /// <param name="entityId">已完成的程序化连接实体。</param>
+        /// <returns>分量实体 ID 的独立数组；目标无效时返回空数组。</returns>
         public static int[] GetConnectedNodes(PlanetFactory factory, int entityId) =>
             PipeApi.IsPipe(factory, entityId)
                 ? PipeRuntime.Bind(factory.cargoTraffic).Members(entityId)

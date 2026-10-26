@@ -4,7 +4,7 @@ using FluidPipes.API;
 
 namespace PipeConsumer
 {
-    /// <summary>Registers iron ingots for pipe transport and exposes bounded inventory interactions.</summary>
+    /// <summary>注册铁块以通过管道运输，并演示有界库存交互。</summary>
     [BepInPlugin("example.pipeconsumer", "Pipe Consumer Example", "1.0.0")]
     [BepInDependency(PipeApi.PluginGuid, "0.4.0")]
     public sealed class ConsumerPlugin : BaseUnityPlugin
@@ -21,7 +21,7 @@ namespace PipeConsumer
             registration?.Dispose();
         }
 
-        /// <summary>Moves a complete batch into a pipe, consuming the supplied counters only on success.</summary>
+        /// <summary>将整批物品放入管道，仅在成功时扣减传入的计数器。</summary>
         internal bool TrySupply(
             PlanetFactory factory,
             int pipeEntityId,
@@ -41,7 +41,7 @@ namespace PipeConsumer
             return true;
         }
 
-        /// <summary>Extracts at most the caller's reserved free capacity.</summary>
+        /// <summary>最多提取调用方预留的空闲容量。</summary>
         internal bool TryReceive(
             PlanetFactory factory,
             int pipeEntityId,

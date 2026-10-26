@@ -1,15 +1,15 @@
 namespace FluidPipes.API
 {
-    /// <summary>The rendering category of the pipe wall.</summary>
+    /// <summary>管壁的渲染类别。</summary>
     public enum PipeWallMode
     {
-        /// <summary>A transparent wall with separate interior and exterior passes.</summary>
+        /// <summary>透明管壁，具有独立的内侧与外侧渲染通道。</summary>
         Glass,
 
-        /// <summary>An opaque wall that writes depth.</summary>
+        /// <summary>写入深度的不透明管壁。</summary>
         Opaque,
 
-        /// <summary>An exposed structural interior using the configured pipe dimensions as its collision envelope.</summary>
+        /// <summary>外露的结构内芯，以配置的管道尺寸作为其碰撞包围体。</summary>
         Open,
     }
 }

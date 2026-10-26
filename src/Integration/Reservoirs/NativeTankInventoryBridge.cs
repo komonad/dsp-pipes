@@ -135,7 +135,7 @@ namespace FluidPipes.Integration.Reservoirs
             }
 
             var projection = ProjectionFor(__instance, __instance.factory, tankId);
-            // Native gestures mutate a private projection; only the committed delta changes storage.
+            // 原生手势修改的是私有投影；只有提交后的增量才改变库存。
             projection.OriginalStorage = __instance.storage;
             projection.Inventory = inventory;
             projection.PipeEntityId = pipe ? PipeEntityId : 0;
@@ -151,7 +151,7 @@ namespace FluidPipes.Integration.Reservoirs
                 : projection.OriginalStorage.tankPool[tankId];
             tank.fluidId = inventory.Count > 0 ? inventory.Item : 0;
             tank.fluidCount = projection.ProjectedCount;
-            // Keep native fill animation bounded while exposing all retained stock to extraction.
+            // 保持原生填充动画有界，同时让全部保留库存可被提取。
             tank.fluidCapacity = (int)
                 Math.Min(int.MaxValue, Math.Max(inventory.Capacity, projection.ProjectedCount));
             tank.fluidInc = (int)
@@ -246,7 +246,7 @@ namespace FluidPipes.Integration.Reservoirs
             int remainingHandCount = player.inhandItemCount;
             int remainingHandPoints = player.inhandItemInc;
             int remainingHandItem = player.inhandItemId;
-            // Factory transfers can change availability between the gesture and its shared-inventory commit.
+            // 工厂传输可能在手势与其共享库存提交之间改变可用量。
             RestoreHand(player, projection);
 
             var graph = PipeRuntime.Bind(window.factory.cargoTraffic);

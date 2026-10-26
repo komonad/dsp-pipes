@@ -45,7 +45,7 @@ namespace FluidPipes
 
         public void MachinePort(Vector3 anchor, Quaternion orientation, float outletHeight)
         {
-            // Shared centers keep the casing opening, socket and adjoining pipe coaxial.
+            // 共享中心使外壳开口、插口与相邻管道保持同轴。
             float casingHalfWidth = Mathf.Max(0.42f, radius + 0.10f);
             float casingHalfHeight = Mathf.Max(0.45f, radius + 0.13f);
             float outletRimRadius = radius * (1 + 0.1f * geometry.FittingScale);

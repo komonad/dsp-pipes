@@ -15,7 +15,7 @@ namespace FluidPipes
 
         private static int SlotCount(PlanetFactory factory, int objectId)
         {
-            // Connection storage follows the allocated owner pool; overhaul mods can extend its stride.
+            // 连接存储跟随已分配的属主池；大型改版 mod 可扩展其步长。
             return objectId > 0
                 ? factory.entityConnPool.Length / factory.entityPool.Length
                 : factory.prebuildConnPool.Length / factory.prebuildPool.Length;
@@ -166,7 +166,7 @@ namespace FluidPipes
                     bool invalid = !PipeRuntime.IsPipeObject(factory, other);
                     if (!invalid && other > entityId)
                     {
-                        // Native path placement inserts intermediate nodes for spans longer than one grid step.
+                        // 原生路径放置会为超过一格间距的跨度插入中间节点。
                         float limit = 2.2f * Math.Max(1, factory.planet.realRadius / 200f);
                         if (
                             (
@@ -274,7 +274,7 @@ namespace FluidPipes
 
             int sb = FreeSlot(factory, secondEntityId, preferredB);
             PipeTopology.Connect(factory, firstEntityId, secondEntityId);
-            // Slot zero is a native path output; extra undirected edges use free input slots on both ends.
+            // 零号槽位是原生路径输出；额外的无向边使用两端空闲的输入槽位。
             if (sa == 0 && sb == 0)
             {
                 sb = FreeSlot(factory, secondEntityId, 1);
@@ -683,7 +683,7 @@ namespace FluidPipes
             {
                 return true;
             }
-            // Prebuild-to-entity conversion preserves reciprocal slot identities at both endpoints.
+            // 待建对象转实体时保留两端互为对应的槽位标识。
             PipeConnections.MoveObject(__instance, oldId, newId);
             return false;
         }

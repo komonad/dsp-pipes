@@ -3,37 +3,37 @@ using UnityEngine;
 
 namespace FluidPipes.API
 {
-    /// <summary>Immutable wall, conductor and effect settings for a connection type.</summary>
+    /// <summary>连接类型不可变的管壁、导体与效果设置。</summary>
     public sealed class PipeAppearance
     {
-        /// <summary>The wall rendering category.</summary>
+        /// <summary>管壁渲染类别。</summary>
         public PipeWallMode WallMode { get; }
 
-        /// <summary>Whether decorative internal geometry is drawn.</summary>
+        /// <summary>是否绘制装饰性内部几何。</summary>
         public bool HasCore { get; }
 
-        /// <summary>The default single-conductor radius divided by the wall radius.</summary>
+        /// <summary>默认单导体半径除以管壁半径。</summary>
         public float CoreRadiusFraction { get; }
 
-        /// <summary>The period used to unwrap longitudinal texture coordinates across adjacent mesh sections. Zero keeps coordinates nonperiodic.</summary>
+        /// <summary>用于在相邻网格截面间展开纵向纹理坐标的周期。零表示坐标不具周期性。</summary>
         public float TextureCoordinatePeriod { get; }
 
-        /// <summary>The optional structural cross-section. A profile enables internal rendering and supplies the members drawn inside the wall.</summary>
+        /// <summary>可选的结构截面。截面对象会启用内部渲染，并提供绘制在管壁内部的构件。</summary>
         public PipeInteriorProfile Interior { get; }
 
         internal Action<PipeMaterialSet> ConfigureMaterials { get; }
         internal Action<PipeEffectContext, MaterialPropertyBlock> ApplyEffects { get; }
         internal Func<Vector3, float> TextureCoordinate { get; }
 
-        /// <summary>Defines cached materials and single-conductor effects through the seven-parameter binary interface.</summary>
-        /// <param name="wallMode">The wall rendering category.</param>
-        /// <param name="configureMaterials">A main-thread callback that configures library-owned material copies once per resource generation.</param>
-        /// <param name="hasCore">Whether a decorative conductor is rendered.</param>
-        /// <param name="coreRadiusFraction">Conductor radius fraction, greater than zero and at most 0.85.</param>
-        /// <param name="applyEffects">A main-thread draw callback writing batch uniforms into a borrowed property block; the block is valid during this callback.</param>
-        /// <param name="textureCoordinate">A pure function mapping a world-space centerline position to a longitudinal texture coordinate; null uses local arc length.</param>
-        /// <param name="textureCoordinatePeriod">A finite nonnegative period for the texture-coordinate callback. Positive values unwrap adjacent sections to the nearest period; zero preserves callback values.</param>
-        /// <exception cref="ArgumentOutOfRangeException">A wall mode, core radius or coordinate period falls outside its supported range.</exception>
+        /// <summary>通过七参数二进制接口定义缓存材质和单导体效果。</summary>
+        /// <param name="wallMode">管壁渲染类别。</param>
+        /// <param name="configureMaterials">主线程回调，每轮资源生成时配置库自有材质副本。</param>
+        /// <param name="hasCore">是否绘制装饰性导体。</param>
+        /// <param name="coreRadiusFraction">导体半径比例，大于零且不大于 0.85。</param>
+        /// <param name="applyEffects">主线程绘制回调，将批次统一变量写入借用的属性块；该属性块在本次回调期间有效。</param>
+        /// <param name="textureCoordinate">将世界空间中心线位置映射为纵向纹理坐标的纯函数；null 使用局部弧长。</param>
+        /// <param name="textureCoordinatePeriod">纹理坐标回调的有限非负周期。正值将相邻截面展开到最近的周期；零保留回调值。</param>
+        /// <exception cref="ArgumentOutOfRangeException">管壁模式、内芯半径或坐标周期超出其支持范围。</exception>
         public PipeAppearance(
             PipeWallMode wallMode,
             Action<PipeMaterialSet> configureMaterials,
@@ -54,16 +54,16 @@ namespace FluidPipes.API
                 null
             ) { }
 
-        /// <summary>Defines cached materials and optional per-batch effects.</summary>
-        /// <param name="wallMode">The wall rendering category.</param>
-        /// <param name="configureMaterials">A main-thread callback that configures library-owned material copies once per resource generation.</param>
-        /// <param name="hasCore">Whether a decorative conductor is rendered.</param>
-        /// <param name="coreRadiusFraction">Conductor radius fraction, greater than zero and at most 0.85.</param>
-        /// <param name="applyEffects">A main-thread draw callback writing batch uniforms into a borrowed property block; the block is valid during this callback.</param>
-        /// <param name="textureCoordinate">A pure function mapping a world-space centerline position to a longitudinal texture coordinate; null uses local arc length.</param>
-        /// <param name="textureCoordinatePeriod">A finite nonnegative period for the texture-coordinate callback. Positive values unwrap each adjacent section to the nearest period; zero preserves the callback values. Local arc-length coordinates retain their default mapping.</param>
-        /// <param name="interior">A structural cross-section that enables internal rendering. Null uses the single conductor controlled by hasCore and coreRadiusFraction.</param>
-        /// <exception cref="ArgumentOutOfRangeException">A wall mode, core radius or coordinate period falls outside its supported range.</exception>
+        /// <summary>定义缓存材质和可选的每批次效果。</summary>
+        /// <param name="wallMode">管壁渲染类别。</param>
+        /// <param name="configureMaterials">主线程回调，每轮资源生成时配置库自有材质副本。</param>
+        /// <param name="hasCore">是否绘制装饰性导体。</param>
+        /// <param name="coreRadiusFraction">导体半径比例，大于零且不大于 0.85。</param>
+        /// <param name="applyEffects">主线程绘制回调，将批次统一变量写入借用的属性块；该属性块在本次回调期间有效。</param>
+        /// <param name="textureCoordinate">将世界空间中心线位置映射为纵向纹理坐标的纯函数；null 使用局部弧长。</param>
+        /// <param name="textureCoordinatePeriod">纹理坐标回调的有限非负周期。正值将各相邻截面展开到最近的周期；零保留回调值。局部弧长坐标保持其默认映射。</param>
+        /// <param name="interior">启用内部渲染的结构截面。null 使用由 hasCore 和 coreRadiusFraction 控制的单导体。</param>
+        /// <exception cref="ArgumentOutOfRangeException">管壁模式、内芯半径或坐标周期超出其支持范围。</exception>
         public PipeAppearance(
             PipeWallMode wallMode = PipeWallMode.Glass,
             Action<PipeMaterialSet> configureMaterials = null,

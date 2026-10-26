@@ -6,7 +6,7 @@ using HarmonyLib;
 
 namespace FluidPipes.Integration.Belts
 {
-    // Harmony binds hook parameters by native argument name.
+    // Harmony 按原生参数名绑定钩子参数。
     [HarmonyPatch]
     internal static class PathInsertPatch
     {

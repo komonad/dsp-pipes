@@ -300,7 +300,7 @@ namespace FluidPipes
 
                 var side = Vector3.Cross(forward, up).normalized;
                 Vector3 root = SupportRoot(socket);
-                // The two struts overlap the native frame and the outside of the trunk collar.
+                // 两根支撑杆与原版框架及主干套环外侧重叠。
                 foreach (float sign in new[] { -1f, 1f })
                 {
                     Beam(

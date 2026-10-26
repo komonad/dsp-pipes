@@ -113,7 +113,7 @@ namespace FluidPipes.Integration.Belts
             )
             {
                 PipeVisuals.Dirty(__instance, entityId);
-                // Center-height changes can alter a neighbor's fitting ownership at its other end.
+                // 中心高度变化可能改变相邻节点另一端的接头归属。
                 foreach (int neighbor in API.PipeTypes.GetNeighbors(__instance, entityId))
                 {
                     PipeVisuals.Dirty(__instance, neighbor);

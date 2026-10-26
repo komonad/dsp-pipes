@@ -414,7 +414,7 @@ internal static class PipeIconRender
             image.ReadPixels(new Rect(0, 0, size, size), 0, 0);
             image.Apply();
             backgroundPixels = image.GetPixels();
-            // Black/white matting recovers straight-alpha coverage independently of shader alpha writes.
+            // 黑/白抠像可独立于着色器 alpha 写入恢复直通 alpha 覆盖率。
             for (int index3 = 0; index3 < pixels.Length; index3++)
             {
                 var black = pixels[index3].linear;

@@ -940,7 +940,7 @@ namespace FluidPipes
                 {
                     return false;
                 }
-                // Container fields remain authoritative for native logistics and save serialization.
+                // 容器字段仍是原生物流与存档序列化的权威来源。
                 if (pool.Capacity - pool.Count < count)
                 {
                     pool.Measure();

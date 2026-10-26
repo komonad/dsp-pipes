@@ -55,7 +55,7 @@ namespace FluidPipes.Integration.Machines
                 __result,
                 original =>
                 {
-                    // The terminal stands outside the housing while retaining its native machine slot index.
+                    // 端子位于机器外壳之外，同时保留其原生机器插槽索引。
                     var clone = (PrefabDesc)CloneDescription.Invoke(original, null);
                     clone.portPoses = PipePorts(original);
                     return clone;
@@ -102,7 +102,7 @@ namespace FluidPipes.Integration.Machines
         ]
         public static void BeginBuild(out bool __state)
         {
-            // Reciprocal slots are rewritten in separate calls during prebuild conversion.
+            // 待建对象转换期间，互为对应的插槽分两次调用重写。
             PipeMachinePorts.BeginObjectMove();
             __state = true;
         }

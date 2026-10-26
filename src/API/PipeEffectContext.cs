@@ -2,22 +2,22 @@ using UnityEngine;
 
 namespace FluidPipes.API
 {
-    /// <summary>A rendering callback context for one spatial and semantic batch.</summary>
+    /// <summary>单个空间和语义批次的渲染回调上下文。</summary>
     public readonly struct PipeEffectContext
     {
-        /// <summary>The factory being rendered.</summary>
+        /// <summary>正在渲染的工厂。</summary>
         public PlanetFactory Factory { get; }
 
-        /// <summary>A representative completed entity in this batch.</summary>
+        /// <summary>本批次中具有代表性的已完成实体。</summary>
         public int EntityId { get; }
 
-        /// <summary>The stable semantic grouping key supplied by the type.</summary>
+        /// <summary>由类型提供的稳定语义分组键。</summary>
         public int GroupKey { get; }
 
-        /// <summary>Unity animation time in seconds.</summary>
+        /// <summary>Unity 动画时间，单位为秒。</summary>
         public float TimeSeconds { get; }
 
-        /// <summary>The surface being drawn.</summary>
+        /// <summary>正在绘制的表面。</summary>
         public PipeSurfaceRole Surface { get; }
 
         internal PipeEffectContext(

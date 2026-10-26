@@ -89,7 +89,7 @@ namespace FluidPipes.Integration
             }
             for (int itemIndex = 0; itemIndex < items.Length; itemIndex++)
             {
-                // BuildBarTool encodes upper-row columns as 21 through 30 in item prototypes.
+                // BuildBarTool 在物品原型中用 21 到 30 编码上排栏位。
                 items[itemIndex].BuildIndex = category * 100 + 20 + freeColumns[itemIndex];
             }
             refresh.Invoke(null, null);

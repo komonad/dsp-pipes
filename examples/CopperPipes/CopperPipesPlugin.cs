@@ -10,7 +10,7 @@ using xiaoye97;
 
 namespace CopperPipes
 {
-    /// <summary>Registers a craftable copper pipe through the public FluidPipes extension API.</summary>
+    /// <summary>通过 FluidPipes 公共扩展 API 注册可制造的铜制管道。</summary>
     [BepInPlugin(PluginGuid, "Copper Pipes", "1.0.1")]
     [BepInDependency(PipeApi.PluginGuid, "0.8.0")]
     [BepInDependency(CommonAPIPlugin.GUID)]

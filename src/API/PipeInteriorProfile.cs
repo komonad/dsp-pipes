@@ -5,26 +5,26 @@ using UnityEngine;
 
 namespace FluidPipes.API
 {
-    /// <summary>A longitudinal member positioned inside the pipe envelope.</summary>
+    /// <summary>位于管道包络内部的纵向构件。</summary>
     public sealed class PipeInteriorMember
     {
-        /// <summary>The cross-section offset divided by the outer wall radius. X follows the path tangent crossed with radial up; Y follows radial up projected onto the section plane.</summary>
+        /// <summary>截面偏移与外管壁半径之比。X 沿路径切线与径向向上方向的叉积，Y 沿径向向上方向在截面平面上的投影。</summary>
         public Vector2 Offset { get; }
 
-        /// <summary>The section's enclosing radius divided by the outer wall radius.</summary>
+        /// <summary>截面包围半径与外管壁半径之比。</summary>
         public float RadiusFraction => Section.RadiusFraction;
 
-        /// <summary>The immutable perimeter dimensions.</summary>
+        /// <summary>不可变的周界尺寸。</summary>
         public PipeInteriorSection Section { get; }
 
-        /// <summary>The material and effect role used to draw this member.</summary>
+        /// <summary>绘制该构件所用的材质和效果角色。</summary>
         public PipeSurfaceRole Surface { get; }
 
-        /// <summary>Defines a circular beam or conductor inside the wall envelope.</summary>
-        /// <param name="offset">A finite normalized offset whose magnitude plus radiusFraction is strictly below 0.9.</param>
-        /// <param name="radiusFraction">Member radius fraction, from 0.01 through 0.85.</param>
-        /// <param name="surface">Core selects the conductor material; Fittings selects the metal fitting material.</param>
-        /// <exception cref="ArgumentOutOfRangeException">An offset, radius or surface falls outside its supported range.</exception>
+        /// <summary>定义管壁包络内部的圆形梁或导体。</summary>
+        /// <param name="offset">有限的归一化偏移，其模长加上 radiusFraction 严格小于 0.9。</param>
+        /// <param name="radiusFraction">构件半径比例，范围为 0.01 到 0.85。</param>
+        /// <param name="surface">Core 选择导体材质；Fittings 选择金属接头材质。</param>
+        /// <exception cref="ArgumentOutOfRangeException">偏移、半径或表面角色超出其支持范围。</exception>
         public PipeInteriorMember(
             Vector2 offset,
             float radiusFraction,
@@ -32,12 +32,12 @@ namespace FluidPipes.API
         )
             : this(offset, PipeInteriorSection.Circle(radiusFraction), surface) { }
 
-        /// <summary>Positions a configured section inside the pipe envelope.</summary>
-        /// <param name="offset">Finite normalized lateral and radial offsets. Its magnitude plus the section's enclosing radius is strictly below 0.9.</param>
-        /// <param name="section">The immutable perimeter shape and normalized dimensions.</param>
-        /// <param name="surface">Core selects the conductor material; Fittings selects the metal fitting material.</param>
-        /// <exception cref="ArgumentNullException">The section is null.</exception>
-        /// <exception cref="ArgumentOutOfRangeException">The offset or surface falls outside its supported range.</exception>
+        /// <summary>将已配置的截面放置在管道包络内部。</summary>
+        /// <param name="offset">有限的归一化横向和径向偏移。其模长加上截面的包围半径严格小于 0.9。</param>
+        /// <param name="section">不可变的周界形状和归一化尺寸。</param>
+        /// <param name="surface">Core 选择导体材质；Fittings 选择金属接头材质。</param>
+        /// <exception cref="ArgumentNullException">截面为 null。</exception>
+        /// <exception cref="ArgumentOutOfRangeException">偏移或表面角色超出其支持范围。</exception>
         public PipeInteriorMember(
             Vector2 offset,
             PipeInteriorSection section,
@@ -68,19 +68,19 @@ namespace FluidPipes.API
         }
     }
 
-    /// <summary>An immutable cross-section of longitudinal beams and conductors for structural pipes.</summary>
-    /// <remarks>Undirected types match members one-to-one at (x, y) and (-x, y), including section shape, dimensions and surface role. Path reversal flips the lateral axis; the radial Y axis retains its orientation. Offsets and dimensions are measured relative to the outer wall radius. Members follow the node centerline; branch nodes generate one section per connected arm.</remarks>
+    /// <summary>结构管道纵向梁和导体的不可变截面。</summary>
+    /// <remarks>无向类型的构件在 (x, y) 与 (-x, y) 处一一匹配，包括截面形状、尺寸和表面角色。路径反向会翻转横向轴；径向 Y 轴保持其朝向。偏移和尺寸相对于外管壁半径度量。构件沿节点中心线延伸；分支节点为每个连接臂生成一个截面。</remarks>
     public sealed class PipeInteriorProfile
     {
-        /// <summary>The ordered read-only snapshot of the configured members.</summary>
+        /// <summary>已配置构件的有序只读快照。</summary>
         public IReadOnlyList<PipeInteriorMember> Members { get; }
 
         internal bool IsReversalSymmetric { get; }
 
-        /// <summary>Captures a bounded cross-section for procedural longitudinal geometry.</summary>
-        /// <param name="members">From one through sixteen immutable members. Each member contributes an independently meshed section.</param>
-        /// <exception cref="ArgumentNullException">The collection or one of its members is null.</exception>
-        /// <exception cref="ArgumentException">The member count falls outside the supported interval.</exception>
+        /// <summary>捕获用于程序化纵向几何的有界截面。</summary>
+        /// <param name="members">1 到 16 个不可变构件。每个构件贡献一个独立网格化的截面。</param>
+        /// <exception cref="ArgumentNullException">集合或其某个构件为 null。</exception>
+        /// <exception cref="ArgumentException">构件数量超出支持区间。</exception>
         public PipeInteriorProfile(IEnumerable<PipeInteriorMember> members)
         {
             if (members == null)

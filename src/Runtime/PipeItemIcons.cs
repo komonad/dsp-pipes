@@ -46,7 +46,7 @@ namespace FluidPipes
                 );
             }
 
-            // The native atlas copies this texture region after prototype registration completes.
+            // 原生图集在原型注册完成后复制该纹理区域。
             prototype.IconPath = "";
             iconSprite.SetValue(prototype, icon);
         }
