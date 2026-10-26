@@ -33,6 +33,9 @@ namespace FluidPipes
 
         [ThreadStatic]
         private static bool pipePrebuild;
+
+        [ThreadStatic]
+        private static bool registeredPipePrebuild;
         private static Mesh mesh;
         private static Material material;
 
@@ -50,7 +53,9 @@ namespace FluidPipes
         {
             if (model.connRenderer != null)
             {
-                State(model.connRenderer).PipeCursor = __instance.handItem?.ID == Prototypes.ItemId;
+                State(model.connRenderer).PipeCursor = PipeTypeRegistry.IsUndirected(
+                    __instance.handItem?.ID
+                );
             }
         }
 
@@ -78,6 +83,7 @@ namespace FluidPipes
             }
 
             pipePrebuild = false;
+            registeredPipePrebuild = false;
         }
 
         [
@@ -92,6 +98,8 @@ namespace FluidPipes
                 nameof(List<ConnGizmoObj>.Add)
             );
             var lines = AccessTools.Field(typeof(ConnGizmoRenderer), "objs_2");
+            var endpoints = AccessTools.Field(typeof(ConnGizmoRenderer), "objs_0");
+            var intermediatePoints = AccessTools.Field(typeof(ConnGizmoRenderer), "objs_1");
             int last = -1;
             bool isLine = false;
             for (int index = 0; index < code.Count; index++)
@@ -115,6 +123,7 @@ namespace FluidPipes
                 }
             }
             isLine = false;
+            bool isPoint = false;
             for (int index2 = 0; index2 < code.Count; index2++)
             {
                 var instruction = code[index2];
@@ -125,6 +134,7 @@ namespace FluidPipes
                 )
                 {
                     isLine = Equals(field, lines);
+                    isPoint = Equals(field, endpoints) || Equals(field, intermediatePoints);
                 }
 
                 if (
@@ -140,6 +150,17 @@ namespace FluidPipes
                     replacement.labels.AddRange(instruction.labels);
                     replacement.blocks.AddRange(instruction.blocks);
                     yield return replacement;
+                }
+                else if (isPoint && instruction.Calls(add))
+                {
+                    var replacement = new CodeInstruction(
+                        OpCodes.Call,
+                        AccessTools.Method(typeof(PipePlanningGizmos), nameof(AddPoint))
+                    );
+                    replacement.labels.AddRange(instruction.labels);
+                    replacement.blocks.AddRange(instruction.blocks);
+                    yield return replacement;
+                    isPoint = false;
                 }
                 else if (isLine && instruction.Calls(add))
                 {
@@ -163,10 +184,20 @@ namespace FluidPipes
             }
         }
 
-        public static ItemProto Select(ProtoSet<ItemProto> set, int entityId)
+        public static ItemProto Select(ProtoSet<ItemProto> set, int itemId)
         {
-            pipePrebuild = entityId == Prototypes.ItemId;
-            return set.Select(entityId);
+            pipePrebuild = PipeTypeRegistry.IsUndirected(itemId);
+            registeredPipePrebuild = PipeTypeRegistry.IsItem(itemId);
+            return set.Select(itemId);
+        }
+
+        public static void AddPoint(List<ConnGizmoObj> native, ConnGizmoObj item)
+        {
+            if (registeredPipePrebuild)
+            {
+                item.rot = Maths.SphericalRotation(item.pos, 0);
+            }
+            native.Add(item);
         }
 
         public static void AddPrebuild(

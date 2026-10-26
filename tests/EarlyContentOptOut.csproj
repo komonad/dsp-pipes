@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="../Local.props" />
+    <PropertyGroup>
+        <TargetFramework>net472</TargetFramework>
+        <LangVersion>7.3</LangVersion>
+        <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    </PropertyGroup>
+    <ItemGroup>
+        <Compile Include="EarlyContentOptOut.cs" />
+        <ProjectReference Include="../FluidPipes.csproj" />
+        <Reference
+            Include="Assembly-CSharp"
+            HintPath="$(Managed)/Assembly-CSharp.dll"
+            Private="false"
+        />
+        <Reference Include="BepInEx" HintPath="$(BepInExCore)/BepInEx.dll" Private="false" />
+        <Reference
+            Include="LDBTool"
+            HintPath="$(BepInExCore)/../plugins/xiaoye97-LDBTool/LDBTool.dll"
+            Private="false"
+        />
+        <Reference Include="UnityEngine" HintPath="$(Managed)/UnityEngine.dll" Private="false" />
+        <Reference
+            Include="UnityEngine.CoreModule"
+            HintPath="$(Managed)/UnityEngine.CoreModule.dll"
+            Private="false"
+        />
+    </ItemGroup>
+</Project>

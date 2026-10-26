@@ -51,7 +51,7 @@ internal static class PipeIconRender
         return mesh;
     }
 
-    public static void Render(string directory, bool valve = false)
+    public static void Render(string directory, bool valve = false, bool copper = false)
     {
         const int size = 640;
         const int layer = 30;
@@ -101,6 +101,12 @@ internal static class PipeIconRender
             };
             steel.SetFloat("_Metallic", 0.75f);
             steel.SetFloat("_Glossiness", 0.62f);
+            if (copper)
+            {
+                steel.color = new Color(0.72f, 0.36f, 0.16f);
+                steel.SetFloat("_Metallic", 0.95f);
+                steel.SetFloat("_Glossiness", 0.75f);
+            }
             objects.Add(steel);
             var dark = new Material(steel) { color = new Color(0.19f, 0.23f, 0.26f) };
             dark.SetFloat("_Glossiness", 0.45f);
@@ -119,6 +125,19 @@ internal static class PipeIconRender
             glass.SetInt("_ZWrite", 0);
             glass.EnableKeyword("_ALPHAPREMULTIPLY_ON");
             glass.renderQueue = 3000;
+            if (copper)
+            {
+                glass.name = "FluidPipes.IconCopper";
+                glass.color = steel.color;
+                glass.SetFloat("_Metallic", 0.95f);
+                glass.SetFloat("_Glossiness", 0.75f);
+                glass.SetFloat("_Mode", 0);
+                glass.SetOverrideTag("RenderType", "Opaque");
+                glass.SetInt("_DstBlend", (int)BlendMode.Zero);
+                glass.SetInt("_ZWrite", 1);
+                glass.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                glass.renderQueue = 2000;
+            }
             objects.Add(glass);
             var accent = new Material(steel) { color = new Color(0.82f, 0.51f, 0.17f) };
             accent.SetFloat("_Metallic", 0.35f);
@@ -415,7 +434,7 @@ internal static class PipeIconRender
             image.SetPixels(pixels);
             image.Apply();
             var middle = image.GetPixel(size / 2, size / 2);
-            if (!valve && (middle.a < 0.25f || middle.a > 0.95f || middle.b < 0.25f))
+            if (!valve && !copper && (middle.a < 0.25f || middle.a > 0.95f || middle.b < 0.25f))
                 throw new InvalidOperationException(
                     "Icon glass body does not retain translucent blue coverage: " + middle
                 );
@@ -439,7 +458,9 @@ internal static class PipeIconRender
             File.WriteAllBytes(
                 Path.Combine(
                     directory,
-                    valve ? "pipe-valve-icon-orthographic.png" : "pipe-icon-orthographic.png"
+                    copper ? "pipe-copper-icon-orthographic.png"
+                        : valve ? "pipe-valve-icon-orthographic.png"
+                        : "pipe-icon-orthographic.png"
                 ),
                 image.EncodeToPNG()
             );

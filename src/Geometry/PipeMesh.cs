@@ -1,17 +1,28 @@
 using System;
 using System.Collections.Generic;
+using FluidPipes.API;
 using UnityEngine;
 using UnityEngine.Rendering;
 
 namespace FluidPipes
 {
-    internal sealed class PipeMesh
+    internal sealed partial class PipeMesh
     {
-        public const float Radius = 0.28f;
+        public const float Radius = 0.32f;
+
+        // Default transport centerline offset above the native entity anchor.
+        internal const float CenterHeight = 0.34f;
+        internal const int MachinePanelMaterial = 2;
+        internal const int MachineShellMaterial = 3;
         public static bool MetalFittings = true;
         private const int Sides = 32;
+        private const int TubeRingSize = Sides + 1;
         private readonly float radius;
         private readonly bool trim;
+        private readonly PipeGeometryProfile geometry;
+        private readonly Func<Vector3, float> textureCoordinate;
+        private readonly float textureCoordinatePeriod;
+        private readonly Vector3 textureOrigin;
         private readonly List<Vector3> vertices = new List<Vector3>();
         private readonly List<Vector3> normals = new List<Vector3>();
         private readonly List<Vector2> uvs = new List<Vector2>();
@@ -19,7 +30,13 @@ namespace FluidPipes
         private readonly HashSet<Vector3> rings = new HashSet<Vector3>();
         private List<Vector3> polygon = new List<Vector3>(8);
         private List<Vector3> clipped = new List<Vector3>(8);
-        private readonly List<int>[] indices = { new List<int>(), new List<int>() };
+        private readonly List<int>[] indices =
+        {
+            new List<int>(),
+            new List<int>(),
+            new List<int>(),
+            new List<int>(),
+        };
         public int VertexCount => vertices.Count;
 
         public void Append(PipeMesh source, Vector3 offset, bool reverse = false)
@@ -43,7 +60,7 @@ namespace FluidPipes
             }
 
             uvs.AddRange(source.uvs);
-            for (int material = 0; material < 2; material++)
+            for (int material = 0; material < indices.Length; material++)
             {
                 for (int index = 0; index < source.indices[material].Count; index += 3)
                 {
@@ -63,10 +80,21 @@ namespace FluidPipes
             }
         }
 
-        public PipeMesh(float radius = Radius, bool trim = true)
+        public PipeMesh(
+            float radius = Radius,
+            bool trim = true,
+            Func<Vector3, float> textureCoordinate = null,
+            Vector3 textureOrigin = default(Vector3),
+            PipeGeometryProfile geometry = null,
+            float textureCoordinatePeriod = 0
+        )
         {
             this.radius = radius;
             this.trim = trim;
+            this.geometry = geometry ?? PipeGeometryProfile.Default;
+            this.textureCoordinate = textureCoordinate;
+            this.textureCoordinatePeriod = textureCoordinatePeriod;
+            this.textureOrigin = textureOrigin;
         }
 
         public void Node(
@@ -76,9 +104,32 @@ namespace FluidPipes
             IList<Vector3> ends,
             IList<bool> collars,
             IList<Vector3> endAxes = null,
-            IList<Vector3> endUps = null
+            IList<Vector3> endUps = null,
+            IList<float> endPeerRadiusRatios = null
         )
         {
+            if (trim && endPeerRadiusRatios != null)
+            {
+                for (int endIndex = 0; endIndex < ends.Count; endIndex++)
+                {
+                    float ratio = endPeerRadiusRatios[endIndex];
+                    if (
+                        float.IsNaN(ratio)
+                        || float.IsInfinity(ratio)
+                        || ratio <= 0
+                        || ratio >= 0.9999f
+                    )
+                    {
+                        continue;
+                    }
+
+                    Vector3 tangent = endAxes == null ? ends[endIndex] - center : endAxes[endIndex];
+                    Vector3 frameUp = endUps == null ? up : endUps[endIndex];
+                    float availableDepth = Vector3.Distance(ends[endIndex], center) * 0.45f;
+                    Reducer(ends[endIndex], tangent, frameUp, ratio, availableDepth);
+                }
+            }
+
             if (ends.Count == 0)
             {
                 if (forward.sqrMagnitude < 0.1f)
@@ -86,21 +137,21 @@ namespace FluidPipes
                     forward = Vector3.Cross(up, Vector3.right).normalized;
                 }
 
+                float halfLength = 0.35f * geometry.Radius / Radius;
                 Tube(
-                    new[] { center - forward * 0.35f, center + forward * 0.35f },
+                    new[] { center - forward * halfLength, center + forward * halfLength },
                     up,
                     radius,
                     0,
                     true,
                     true
                 );
+                SupportRing(center, forward, up);
                 return;
             }
             if (ends.Count == 2)
             {
-                bool bend =
-                    Vector3.Dot((ends[0] - center).normalized, (ends[1] - center).normalized)
-                    > -0.995f;
+                bool bend = NeedsJointFittings(center, ends);
                 if (!bend)
                 {
                     Tube(
@@ -114,6 +165,7 @@ namespace FluidPipes
                         endAxes == null ? null : new[] { -endAxes[0], endAxes[1] },
                         endUps
                     );
+                    SupportRing(center, ends[1] - ends[0], up);
                     return;
                 }
                 if (!trim && MetalFittings)
@@ -155,9 +207,10 @@ namespace FluidPipes
                 );
                 if (trim)
                 {
-                    foreach (var end in ends)
+                    for (int endIndex = 0; endIndex < ends.Count; endIndex++)
                     {
-                        if (rings.Add(end))
+                        Vector3 end = ends[endIndex];
+                        if (collars[endIndex] && rings.Add(end))
                         {
                             Collar(end, end - center, up);
                         }
@@ -176,9 +229,10 @@ namespace FluidPipes
                     Junction(center, up, ends);
                     if (trim)
                     {
-                        foreach (var end in ends)
+                        for (int endIndex = 0; endIndex < ends.Count; endIndex++)
                         {
-                            if (rings.Add(end))
+                            Vector3 end = ends[endIndex];
+                            if (collars[endIndex] && rings.Add(end))
                             {
                                 Collar(end, end - center, up);
                             }
@@ -198,12 +252,24 @@ namespace FluidPipes
                             false,
                             null,
                             endAxes == null ? null : new[] { endAxes[index2], endAxes[index2] },
-                            endUps == null ? null : new[] { up, endUps[index2] }
+                            endUps == null ? null : new[] { up, endUps[index2] },
+                            geometry.SupportRingWidth <= 0
+                        );
+                        SupportRing(
+                            center,
+                            endAxes == null ? ends[index2] - center : endAxes[index2],
+                            up
                         );
                     }
                 }
             }
         }
+
+        internal static bool NeedsJointFittings(Vector3 center, IList<Vector3> ends) =>
+            ends.Count > 2
+            || ends.Count == 2
+                && Vector3.Dot((ends[0] - center).normalized, (ends[1] - center).normalized)
+                    > -0.995f;
 
         private void Collar(Vector3 center, Vector3 tangent, Vector3 up)
         {
@@ -213,32 +279,149 @@ namespace FluidPipes
             }
 
             tangent.Normalize();
+            float depthScale = radius / Radius * geometry.FittingScale;
+            float edgeRadius = radius * (1 + 0.02f * geometry.FittingScale);
+            float outerRadius = radius * (1 + 0.1f * geometry.FittingScale);
             int start = vertices.Count;
             Tube(
                 new[]
                 {
-                    center - tangent * 0.055f,
-                    center - tangent * 0.035f,
-                    center + tangent * 0.035f,
-                    center + tangent * 0.055f,
+                    center - tangent * (0.055f * depthScale),
+                    center - tangent * (0.035f * depthScale),
+                    center + tangent * (0.035f * depthScale),
+                    center + tangent * (0.055f * depthScale),
                 },
                 up,
-                Radius,
+                radius,
                 1,
                 false,
                 false,
-                new[] { Radius * 1.02f, Radius * 1.1f, Radius * 1.1f, Radius * 1.02f }
+                new[] { edgeRadius, outerRadius, outerRadius, edgeRadius }
             );
-            Annulus(center - tangent * 0.055f, -tangent, start, Radius * 0.98f);
-            Annulus(center + tangent * 0.055f, tangent, start + Sides * 3, Radius * 0.98f);
+            Annulus(center - tangent * (0.055f * depthScale), -tangent, start, radius * 0.98f);
+            Annulus(
+                center + tangent * (0.055f * depthScale),
+                tangent,
+                start + TubeRingSize * 3,
+                radius * 0.98f
+            );
+        }
+
+        private void SupportRing(Vector3 center, Vector3 tangent, Vector3 up)
+        {
+            if (!trim || geometry.SupportRingWidth <= 0 || tangent.sqrMagnitude < 0.000001f)
+            {
+                return;
+            }
+
+            tangent.Normalize();
+            float halfWidth = geometry.SupportRingWidth * 0.5f;
+            float flatHalfWidth = halfWidth * 0.6f;
+            Vector3 firstEdge = center - tangent * halfWidth;
+            Vector3 lastEdge = center + tangent * halfWidth;
+            if ((lastEdge - firstEdge).sqrMagnitude < 0.0000000001f)
+            {
+                return;
+            }
+
+            float edgeRadius = radius * (1 + 0.025f * geometry.FittingScale);
+            float outerRadius = radius * (1 + 0.08f * geometry.FittingScale);
+            int start = vertices.Count;
+            Tube(
+                new[]
+                {
+                    firstEdge,
+                    center - tangent * flatHalfWidth,
+                    center + tangent * flatHalfWidth,
+                    lastEdge,
+                },
+                up,
+                radius,
+                1,
+                false,
+                false,
+                new[] { edgeRadius, outerRadius, outerRadius, edgeRadius }
+            );
+            Annulus(center - tangent * halfWidth, -tangent, start, radius * 0.98f);
+            Annulus(
+                center + tangent * halfWidth,
+                tangent,
+                start + TubeRingSize * 3,
+                radius * 0.98f
+            );
+        }
+
+        private void Reducer(
+            Vector3 end,
+            Vector3 tangent,
+            Vector3 up,
+            float peerRadiusRatio,
+            float availableDepth
+        )
+        {
+            float depth = Mathf.Min(radius * 0.45f * geometry.FittingScale, availableDepth);
+            if (depth <= 0.00001f || tangent.sqrMagnitude < 0.000001f || !rings.Add(end))
+            {
+                return;
+            }
+
+            tangent.Normalize();
+            Vector3 rear = end - tangent * depth;
+            var points = new[]
+            {
+                rear,
+                end - tangent * (depth * 0.78f),
+                end - tangent * (depth * 0.22f),
+                end,
+            };
+            float outerRadius = radius * (1 + 0.1f * geometry.FittingScale);
+            float rearInnerRadius = radius * 0.98f;
+            float mouthRadius = radius * peerRadiusRatio * 0.98f;
+            int firstRing = vertices.Count;
+            Tube(
+                points,
+                up,
+                radius,
+                1,
+                false,
+                false,
+                new[]
+                {
+                    radius * (1 + 0.01f * geometry.FittingScale),
+                    outerRadius,
+                    outerRadius,
+                    radius * (1 + 0.02f * geometry.FittingScale),
+                }
+            );
+            Annulus(rear, -tangent, firstRing, rearInnerRadius);
+            Annulus(end, tangent, firstRing + TubeRingSize * 3, mouthRadius);
+
+            var liner = new PipeMesh(
+                radius,
+                false,
+                textureCoordinate,
+                textureOrigin,
+                geometry,
+                textureCoordinatePeriod
+            );
+            liner.Tube(
+                points,
+                up,
+                radius,
+                1,
+                false,
+                false,
+                new[] { rearInnerRadius, rearInnerRadius, mouthRadius, mouthRadius }
+            );
+            Append(liner, Vector3.zero, true);
         }
 
         private void Annulus(Vector3 center, Vector3 normal, int ring, float innerRadius)
         {
             int start = vertices.Count;
-            for (int index = 0; index < Sides; index++)
+            for (int index = 0; index <= Sides; index++)
             {
-                var radial = vertices[ring + index] - center;
+                var radial = vertices[ring + index % Sides] - center;
                 vertices.Add(center + radial);
                 vertices.Add(center + radial.normalized * innerRadius);
                 normals.Add(normal);
@@ -249,7 +432,7 @@ namespace FluidPipes
             for (int index2 = 0; index2 < Sides; index2++)
             {
                 int a = start + index2 * 2;
-                int b = start + ((index2 + 1) % Sides) * 2;
+                int b = start + (index2 + 1) * 2;
                 bool reverse =
                     Vector3.Dot(
                         Vector3.Cross(vertices[b] - vertices[a], vertices[a + 1] - vertices[a]),
@@ -269,66 +452,103 @@ namespace FluidPipes
             bool capEnd,
             IList<float> radii = null,
             IList<Vector3> tangents = null,
-            IList<Vector3> frameUps = null
+            IList<Vector3> frameUps = null,
+            bool capFittings = true,
+            PipeInteriorSection section = null
         )
         {
             int start = vertices.Count;
             var previousSide = Vector3.zero;
+            var previousTangent = Vector3.zero;
+            var firstTangent = Vector3.zero;
+            bool hasPreviousMappedCoordinate = false;
+            float previousMappedCoordinate = 0;
+            float previousLongitudinal = 0;
+            float arcLength = 0;
             for (int row = 0; row < points.Count; row++)
             {
-                Vector3 tangent =
-                    tangents != null && tangents[row].sqrMagnitude > 0.0000001f
-                        ? tangents[row]
-                        : points[Math.Min(row + 1, points.Count - 1)]
-                            - points[Math.Max(0, row - 1)];
-                if (tangent.sqrMagnitude < 0.0000001f)
+                if (row > 0)
                 {
-                    tangent = Vector3.forward;
+                    arcLength += Vector3.Distance(points[row - 1], points[row]);
                 }
-
-                tangent.Normalize();
+                float longitudinal =
+                    textureCoordinate == null
+                        ? arcLength * 2
+                        : textureCoordinate(points[row] + textureOrigin);
+                if (float.IsNaN(longitudinal) || float.IsInfinity(longitudinal))
+                {
+                    longitudinal = arcLength * 2;
+                    hasPreviousMappedCoordinate = false;
+                }
+                else if (textureCoordinate != null && textureCoordinatePeriod > 0)
+                {
+                    float mappedCoordinate = longitudinal;
+                    if (hasPreviousMappedCoordinate)
+                    {
+                        double difference = (double)mappedCoordinate - previousMappedCoordinate;
+                        difference -=
+                            Math.Round(difference / textureCoordinatePeriod)
+                            * textureCoordinatePeriod;
+                        longitudinal = (float)(previousLongitudinal + difference);
+                    }
+                    previousMappedCoordinate = mappedCoordinate;
+                    previousLongitudinal = longitudinal;
+                    hasPreviousMappedCoordinate = true;
+                }
+                Vector3 tangent = PathTangent(points, tangents, row, previousTangent);
+                previousTangent = tangent;
+                if (row == 0)
+                {
+                    firstTangent = tangent;
+                }
                 // Shared endpoint frames keep adjoining transparent sections on the same ring plane and phase.
                 bool shared = frameUps != null && frameUps[row].sqrMagnitude > 0.0000001f;
-                var side =
-                    shared ? Vector3.Cross(tangent, frameUps[row])
-                    : previousSide.sqrMagnitude > 0
-                        ? previousSide - tangent * Vector3.Dot(previousSide, tangent)
-                    : Vector3.Cross(tangent, up);
-                if (side.sqrMagnitude < 0.001f)
-                {
-                    side = Vector3.Cross(tangent, Vector3.right);
-                }
-
-                if (side.sqrMagnitude < 0.001f)
-                {
-                    side = Vector3.Cross(tangent, Vector3.forward);
-                }
-
-                side.Normalize();
+                Vector3 side = FrameSide(
+                    tangent,
+                    shared ? frameUps[row] : up,
+                    previousSide,
+                    shared
+                );
                 previousSide = side;
                 var other = Vector3.Cross(tangent, side).normalized;
-                for (int col = 0; col < Sides; col++)
+                for (int col = 0; col <= Sides; col++)
                 {
-                    float angle = col * Mathf.PI * 2 / Sides;
+                    float angle = (col % Sides) * Mathf.PI * 2 / Sides;
                     var normal = side * Mathf.Cos(angle) + other * Mathf.Sin(angle);
                     float rowRadius = radii == null ? radius : radii[row];
-                    vertices.Add(points[row] + normal * rowRadius);
+                    if (section?.Kind == PipeInteriorSectionKind.RoundedRectangle)
+                    {
+                        Vector2 sectionPoint = RectanglePoint(
+                            section,
+                            col,
+                            out Vector2 sectionNormal
+                        );
+                        vertices.Add(
+                            points[row]
+                                + (side * sectionPoint.x + other * sectionPoint.y)
+                                    * (rowRadius / section.RadiusFraction)
+                        );
+                        normal = side * sectionNormal.x + other * sectionNormal.y;
+                    }
+                    else
+                    {
+                        vertices.Add(points[row] + normal * rowRadius);
+                    }
                     if (radii != null)
                     {
                         int before = Math.Max(0, row - 1);
                         int after = Math.Min(points.Count - 1, row + 1);
+                        float sampleLength = (points[after] - points[before]).magnitude;
                         float slope =
-                            (radii[after] - radii[before])
-                            / (points[after] - points[before]).magnitude;
+                            sampleLength > 0 ? (radii[after] - radii[before]) / sampleLength : 0;
                         normal = (normal - tangent * slope).normalized;
                     }
                     normals.Add(normal);
-                    uvs.Add(
-                        new Vector2(
-                            (float)col / Sides,
-                            row == 0 ? 0 : (points[row] - points[0]).magnitude * 2
-                        )
-                    );
+                    float circumferential =
+                        section?.Kind == PipeInteriorSectionKind.RoundedRectangle
+                            ? RectanglePerimeterCoordinate(section, col)
+                            : (float)col / Sides;
+                    uvs.Add(new Vector2(circumferential, longitudinal));
                 }
                 if (row == 0)
                 {
@@ -337,33 +557,62 @@ namespace FluidPipes
 
                 for (int col = 0; col < Sides; col++)
                 {
-                    int a = start + (row - 1) * Sides + col;
-                    int b = start + (row - 1) * Sides + (col + 1) % Sides;
-                    int c = start + row * Sides + col;
-                    int d = start + row * Sides + (col + 1) % Sides;
+                    int a = start + (row - 1) * TubeRingSize + col;
+                    int b = a + 1;
+                    int c = start + row * TubeRingSize + col;
+                    int d = c + 1;
                     Triangle(material, a, b, c);
                     Triangle(material, b, d, c);
                 }
             }
             if (capStart)
             {
-                Cap(points[0], (points[0] - points[1]).normalized, start, material, radius);
+                if (section?.Kind == PipeInteriorSectionKind.RoundedRectangle)
+                {
+                    SectionCap(points[0], -firstTangent, start, material, radius);
+                }
+                else
+                {
+                    Cap(points[0], -firstTangent, start, material, radius, capFittings);
+                }
             }
 
             if (capEnd)
             {
-                Cap(
-                    points[points.Count - 1],
-                    (points[points.Count - 1] - points[points.Count - 2]).normalized,
-                    start + (points.Count - 1) * Sides,
-                    material,
-                    radius
-                );
+                int lastRing = start + (points.Count - 1) * TubeRingSize;
+                if (section?.Kind == PipeInteriorSectionKind.RoundedRectangle)
+                {
+                    SectionCap(
+                        points[points.Count - 1],
+                        previousTangent,
+                        lastRing,
+                        material,
+                        radius
+                    );
+                }
+                else
+                {
+                    Cap(
+                        points[points.Count - 1],
+                        previousTangent,
+                        lastRing,
+                        material,
+                        radius,
+                        capFittings
+                    );
+                }
             }
 
             if (trim && material == 0)
             {
-                var interior = new PipeMesh(radius * 0.92f, false);
+                var interior = new PipeMesh(
+                    radius * 0.92f,
+                    false,
+                    textureCoordinate,
+                    textureOrigin,
+                    geometry,
+                    textureCoordinatePeriod
+                );
                 interior.Tube(
                     points,
                     up,
@@ -373,13 +622,21 @@ namespace FluidPipes
                     capEnd,
                     null,
                     tangents,
-                    frameUps
+                    frameUps,
+                    capFittings
                 );
                 Append(interior, Vector3.zero, true);
             }
         }
 
-        private void Cap(Vector3 center, Vector3 normal, int ring, int material, float radius)
+        private void Cap(
+            Vector3 center,
+            Vector3 normal,
+            int ring,
+            int material,
+            float radius,
+            bool capFittings
+        )
         {
             float depth = radius * 0.6f;
             int previous = ring;
@@ -389,7 +646,7 @@ namespace FluidPipes
                 float radialScale = Mathf.Cos(angle);
                 float axial = depth * Mathf.Sin(angle);
                 int start = vertices.Count;
-                for (int index = 0; index < Sides; index++)
+                for (int index = 0; index <= Sides; index++)
                 {
                     var radial = (vertices[ring + index] - center).normalized;
                     vertices.Add(center + radial * (radius * radialScale) + normal * axial);
@@ -402,43 +659,56 @@ namespace FluidPipes
                 }
                 for (int index2 = 0; index2 < Sides; index2++)
                 {
-                    int next = (index2 + 1) % Sides;
+                    int next = index2 + 1;
                     OrientedTriangle(material, previous + index2, previous + next, start + index2);
                     OrientedTriangle(material, previous + next, start + next, start + index2);
                 }
                 previous = start;
             }
-            int tip = vertices.Count;
-            vertices.Add(center + normal * depth);
-            normals.Add(normal);
-            uvs.Add(new Vector2(0.5f, Mathf.PI * 0.5f));
             for (int index3 = 0; index3 < Sides; index3++)
             {
-                OrientedTriangle(material, previous + index3, previous + (index3 + 1) % Sides, tip);
+                int tip = vertices.Count;
+                vertices.Add(center + normal * depth);
+                normals.Add(normal);
+                uvs.Add(new Vector2((index3 + 0.5f) / Sides, Mathf.PI * 0.5f));
+                OrientedTriangle(material, previous + index3, previous + index3 + 1, tip);
             }
 
-            if (trim && material == 0)
+            if (trim && material == 0 && capFittings)
             {
                 var side = (vertices[ring] - center).normalized;
                 var up = Vector3.Cross(side, normal);
+                float depthScale = radius / Radius * geometry.FittingScale;
+                float outerRadius = radius * (1 + 0.06f * geometry.FittingScale);
                 int start = vertices.Count;
                 Tube(
                     new[]
                     {
-                        center - normal * 0.035f,
-                        center - normal * 0.02f,
-                        center + normal * 0.01f,
-                        center + normal * 0.025f,
+                        center - normal * (0.035f * depthScale),
+                        center - normal * (0.02f * depthScale),
+                        center + normal * (0.01f * depthScale),
+                        center + normal * (0.025f * depthScale),
                     },
                     up,
                     radius,
                     1,
                     false,
                     false,
-                    new[] { radius * 1.01f, radius * 1.06f, radius * 1.06f, radius * 1.015f }
+                    new[]
+                    {
+                        radius * (1 + 0.01f * geometry.FittingScale),
+                        outerRadius,
+                        outerRadius,
+                        radius * (1 + 0.015f * geometry.FittingScale),
+                    }
                 );
-                Annulus(center - normal * 0.035f, -normal, start, radius * 0.97f);
-                Annulus(center + normal * 0.025f, normal, start + Sides * 3, radius * 0.97f);
+                Annulus(center - normal * (0.035f * depthScale), -normal, start, radius * 0.97f);
+                Annulus(
+                    center + normal * (0.025f * depthScale),
+                    normal,
+                    start + TubeRingSize * 3,
+                    radius * 0.97f
+                );
             }
         }
 
@@ -965,25 +1235,28 @@ namespace FluidPipes
             var positions = new List<Vector3>(vertices);
             var directions = new List<Vector3>(normals);
             var coordinates = new List<Vector2>(uvs);
-            var metal = new List<int>(indices[1]);
-            var inner = new Dictionary<int, int>();
+            var opaque = new List<int>[indices.Length - 1];
             // Opaque fittings require inward faces when viewed through adjoining glass tubes.
-            foreach (int vertex in indices[1])
+            for (int material = 1; material < indices.Length; material++)
             {
-                if (!inner.ContainsKey(vertex))
+                opaque[material - 1] = new List<int>(indices[material]);
+                var inner = new Dictionary<int, int>();
+                foreach (int vertex in indices[material])
                 {
-                    inner.Add(vertex, positions.Count);
-                    positions.Add(vertices[vertex]);
-                    directions.Add(-normals[vertex]);
-                    coordinates.Add(uvs[vertex]);
+                    if (!inner.ContainsKey(vertex))
+                    {
+                        inner.Add(vertex, positions.Count);
+                        positions.Add(vertices[vertex]);
+                        directions.Add(-normals[vertex]);
+                        coordinates.Add(uvs[vertex]);
+                    }
                 }
-            }
-
-            for (int index = 0; index < indices[1].Count; index += 3)
-            {
-                metal.Add(inner[indices[1][index]]);
-                metal.Add(inner[indices[1][index + 2]]);
-                metal.Add(inner[indices[1][index + 1]]);
+                for (int index = 0; index < indices[material].Count; index += 3)
+                {
+                    opaque[material - 1].Add(inner[indices[material][index]]);
+                    opaque[material - 1].Add(inner[indices[material][index + 2]]);
+                    opaque[material - 1].Add(inner[indices[material][index + 1]]);
+                }
             }
             var mesh = new Mesh
             {
@@ -994,6 +1267,17 @@ namespace FluidPipes
             mesh.SetNormals(directions);
             mesh.SetUVs(0, coordinates);
             mesh.subMeshCount = separateGlass ? 3 : 2;
+            int machineSubMeshStart = mesh.subMeshCount;
+            for (int surface = 1; surface < opaque.Length; surface++)
+            {
+                if (opaque[surface].Count == 0)
+                {
+                    continue;
+                }
+                int subMesh = machineSubMeshStart + surface - 1;
+                mesh.subMeshCount = Math.Max(mesh.subMeshCount, subMesh + 1);
+                mesh.SetTriangles(opaque[surface], subMesh);
+            }
             if (separateGlass)
             {
                 mesh.SetTriangles(indices[0], 0);
@@ -1005,7 +1289,7 @@ namespace FluidPipes
                 glass.AddRange(indices[0]);
                 mesh.SetTriangles(glass, 0);
             }
-            mesh.SetTriangles(metal, 1);
+            mesh.SetTriangles(opaque[0], 1);
             mesh.RecalculateBounds();
             mesh.RecalculateTangents();
             return mesh;

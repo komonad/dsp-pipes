@@ -12,7 +12,7 @@ namespace FluidPipes
 
         public static bool Validate(BuildTool_Path tool)
         {
-            if (tool.handItem?.ID != Prototypes.ItemId)
+            if (!PipeTypeRegistry.IsItem(tool.handItem?.ID))
             {
                 return true;
             }

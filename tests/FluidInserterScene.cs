@@ -219,7 +219,7 @@ public sealed partial class SceneCapture
     {
         FluidInserterVisuals.Draw(factory, GameCamera.main);
         int custom = FluidInserterVisuals.Count;
-        if (custom != 6 || FluidInserterVisuals.UsesPipe(factory, nativeSorter))
+        if (custom != 5 || FluidInserterVisuals.UsesPipe(factory, nativeSorter))
             throw new InvalidOperationException(
                 "Automatic inserter classification is incorrect: " + custom
             );
@@ -241,7 +241,7 @@ public sealed partial class SceneCapture
                 "Custom inserter display changes native ownership or components."
             );
         report.Add(
-            "Automatic pipe-endpoint detection replaces five built inserters and one prebuild; ordinary belt inserters keep native displays. Native GPU ownership, power consumers and selection colliders remain present."
+            "Automatic pipe-endpoint detection replaces five completed inserters. Pending and ordinary belt inserters use native displays. Native GPU ownership, power consumers and selection colliders remain present."
         );
         factory.ReadObjectConn(
             nativeSorter,
@@ -441,6 +441,49 @@ public sealed partial class SceneCapture
         for (int index9 = 0; index9 < 8; index9++)
             yield return null;
         SaveImage("ingame-inserters-height.png");
+        SetView(-3, -1.2f, 3.3f, 3.4f, 1.4f, 0.9f);
+        for (int frame = 0; frame < 8; frame++)
+        {
+            yield return null;
+        }
+        int consumerId = factory.entityPool[comparisonPipeSorter].powerConId;
+        var powerSystem = factory.powerSystem;
+        int oldNetwork = powerSystem.consumerPool[consumerId].networkId;
+        int markerNetwork = powerSystem.NewNetwork();
+        powerSystem.consumerPool[consumerId].networkId = markerNetwork;
+        try
+        {
+            powerSystem.networkServes[markerNetwork] = 0;
+            if (FluidInserterVisuals.PowerRatio(factory, comparisonPipeSorter) != 0)
+            {
+                throw new InvalidOperationException(
+                    "Disconnected supply illuminates the inserter marker."
+                );
+            }
+            SaveImage("ingame-inserters-unpowered.png");
+            powerSystem.networkServes[markerNetwork] = 0.5f;
+            if (FluidInserterVisuals.PowerRatio(factory, comparisonPipeSorter) != 0.5f)
+            {
+                throw new InvalidOperationException(
+                    "Inserter marker ignores partial power supply."
+                );
+            }
+            powerSystem.networkServes[markerNetwork] = 1;
+            if (FluidInserterVisuals.PowerRatio(factory, comparisonPipeSorter) != 1)
+            {
+                throw new InvalidOperationException(
+                    "Powered supply leaves the inserter marker dark."
+                );
+            }
+            SaveImage("ingame-inserters-powered.png");
+            report.Add(
+                "Direction-marker intensity follows native consumer supply at 0%, 50% and 100% without geometry rebuilds."
+            );
+        }
+        finally
+        {
+            powerSystem.consumerPool[consumerId].networkId = oldNetwork;
+        }
         system.SetInserterPickTarget(armId, comparisonBelt, 0);
         system.SetInserterInsertTarget(armId, comparisonFactory, 0);
         var restored = SorterRenderer(fluidSorter).instPool[fluid.modelId];
@@ -462,7 +505,11 @@ public sealed partial class SceneCapture
             throw new InvalidOperationException(
                 "Reconnecting a pipe does not restore its custom display."
             );
-        CheckInserterPreview();
+        var previewChecks = CheckInserterPreview();
+        while (previewChecks.MoveNext())
+        {
+            yield return previewChecks.Current;
+        }
         int proto = 0;
         factory.DismantleFinally(GameMain.mainPlayer, fluidSorter, ref proto);
         if (FluidInserterVisuals.Count != custom - 1)
@@ -486,10 +533,10 @@ public sealed partial class SceneCapture
         factory.ClearObjectConn(-pending, 1);
         if (
             FluidInserterVisuals.UsesPipe(factory, -pending)
-            || FluidInserterVisuals.Count != custom - 2
+            || FluidInserterVisuals.Count != custom - 1
         )
             throw new InvalidOperationException(
-                "Disconnecting a pending inserter retains its custom display."
+                "Pending connection changes alter the completed inserter display cache."
             );
         factory.WriteObjectConn(-pending, 0, true, targetB, slotB);
         factory.WriteObjectConn(-pending, 1, false, targetA, slotA);
@@ -498,13 +545,13 @@ public sealed partial class SceneCapture
             || FluidInserterVisuals.Count != custom - 1
         )
             throw new InvalidOperationException(
-                "Reconnecting a pending inserter does not restore its custom display."
+                "Pending reconnection alters the completed inserter display cache."
             );
         factory.RemovePrebuildWithComponents(pending);
-        if (FluidInserterVisuals.Count != custom - 2)
+        if (FluidInserterVisuals.Count != custom - 1)
             throw new InvalidOperationException("Removing a pending inserter retains its shape.");
         report.Add(
-            "Pending inserters switch appearance on connection changes and release their cached geometry when removed."
+            "Pending connection changes and removal preserve the completed inserter display cache."
         );
     }
 
@@ -565,7 +612,7 @@ public sealed partial class SceneCapture
         }
     }
 
-    private void CheckInserterPreview()
+    private IEnumerator CheckInserterPreview()
     {
         var model = GameMain.mainPlayer.controller.actionBuild.model;
         model.Open();
@@ -593,16 +640,25 @@ public sealed partial class SceneCapture
             tool.buildPreviews.Add(ghost);
             tool.UpdatePreviewModels(model);
             tool.UpdatePreviewModelConditions(model);
-            if (model.previewModelCursor != 0 || ghost.previewIndex != -1 || !ghost.needModel)
+            if (model.previewModelCursor != 1 || ghost.previewIndex < 0 || !ghost.needModel)
                 throw new InvalidOperationException(
-                    "Pipe inserter preview retains its native arm model."
+                    "Pipe inserter preview has no native arm model."
                 );
             FluidInserterVisuals.Draw(factory, GameCamera.main);
             int before = FluidInserterVisuals.Rebuilds;
-            for (int index = 0; index < 120; index++)
+            for (int index = 0; index < 60; index++)
             {
+                yield return null;
+                model.EarlyGameTick();
                 tool.UpdatePreviewModels(model);
+                tool.UpdatePreviewModelConditions(model);
                 FluidInserterVisuals.Draw(factory, GameCamera.main);
+                if (model.previewModelCursor != 1 || ghost.previewIndex < 0 || !ghost.needModel)
+                {
+                    throw new InvalidOperationException(
+                        "Native pipe inserter preview disappears at frame " + index
+                    );
+                }
             }
             if (before != FluidInserterVisuals.Rebuilds)
                 throw new InvalidOperationException(
@@ -617,7 +673,7 @@ public sealed partial class SceneCapture
                     "Ordinary inserter previews lose their native model."
                 );
             report.Add(
-                "Pipe inserter construction uses the raised procedural preview; 120 unchanged preview updates rebuild zero meshes, and ordinary inserters retain their native preview."
+                "Pipe inserter construction retains one native preview across 60 rendered frames and rebuilds zero procedural meshes. Ordinary inserters use the same native preview path."
             );
         }
         finally

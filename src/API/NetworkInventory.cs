@@ -3,7 +3,7 @@ namespace FluidPipes.API
     /// <summary>A detached view of the entire shared inventory, including attached native reservoirs.</summary>
     public readonly struct NetworkInventory
     {
-        /// <summary>The stored or tower-filtered item ID; zero denotes an untyped empty space.</summary>
+        /// <summary>The stored or reserved item ID, including tower and enabled machine-port filters; zero denotes an untyped empty space.</summary>
         public int ItemId { get; }
 
         /// <summary>Total items in pipes and attached reservoirs.</summary>
@@ -12,7 +12,7 @@ namespace FluidPipes.API
         /// <summary>Total conserved proliferator points carried by the stored items.</summary>
         public long ProliferatorPoints { get; }
 
-        /// <summary>Total item capacity of the shared space.</summary>
+        /// <summary>Nominal item capacity of the shared space; each pipe node contributes 10.</summary>
         public long Capacity { get; }
 
         /// <summary>Whether incompatible container contents or filters prevent inventory operations.</summary>
@@ -22,6 +22,7 @@ namespace FluidPipes.API
         public bool RequiresFluid { get; }
 
         /// <summary>Stored count divided by capacity; zero when capacity is zero.</summary>
+        /// <remarks>Retained stock from higher-capacity saves can produce a value greater than one.</remarks>
         public double FillFraction => Capacity == 0 ? 0 : (double)Count / Capacity;
 
         internal NetworkInventory(FluidPoolView view)

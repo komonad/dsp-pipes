@@ -26,6 +26,11 @@ namespace FluidPipes
         public double Target = 0.5;
         public ValveDirection Direction;
         public ValveLevel Level;
+        public bool InfiniteEnabled;
+        public int InfiniteSide;
+        public int InfiniteItemId;
+        public double InfiniteTarget = 1;
+        public InfiniteLevelMode InfiniteMode;
         internal double Credit;
     }
 
@@ -38,14 +43,21 @@ namespace FluidPipes
             ((long)factory.planet.id << 32) | (uint)entity;
 
         public static bool IsValve(PlanetFactory factory, int entityId) =>
-            entityId > 0
-                && entityId < factory.entityPool.Length
-                && factory.entityPool[entityId].id == entityId
-                && factory.entityPool[entityId].protoId == Prototypes.ValveId
-            || entityId < 0
-                && -entityId < factory.prebuildPool.Length
-                && factory.prebuildPool[-entityId].id == -entityId
-                && factory.prebuildPool[-entityId].protoId == Prototypes.ValveId;
+            Prototypes.ValveId > 0
+            && factory != null
+            && (
+                entityId > 0
+                    && factory.entityPool != null
+                    && entityId < factory.entityPool.Length
+                    && factory.entityPool[entityId].id == entityId
+                    && factory.entityPool[entityId].protoId == Prototypes.ValveId
+                || entityId < 0
+                    && factory.prebuildPool != null
+                    && -entityId > 0
+                    && -entityId < factory.prebuildPool.Length
+                    && factory.prebuildPool[-entityId].id == -entityId
+                    && factory.prebuildPool[-entityId].protoId == Prototypes.ValveId
+            );
 
         public static ValveSettings Get(PlanetFactory factory, int entity)
         {
@@ -104,6 +116,11 @@ namespace FluidPipes
         {
             var config = Get(factory, entity);
             ValvePower.Demand(factory, entity, false);
+            if (config.InfiniteEnabled)
+            {
+                config.Credit = 0;
+                return SandboxValve.Step(factory, entity, config);
+            }
             Ends(factory, entity, out int sideAPipeEntityId, out int sideBPipeEntityId);
             if (
                 !config.Enabled
@@ -245,10 +262,15 @@ namespace FluidPipes
                 writer.Write(valveSettings.Target);
                 writer.Write((int)valveSettings.Direction);
                 writer.Write((int)valveSettings.Level);
+                writer.Write(valveSettings.InfiniteEnabled);
+                writer.Write(valveSettings.InfiniteSide);
+                writer.Write(valveSettings.InfiniteItemId);
+                writer.Write(valveSettings.InfiniteTarget);
+                writer.Write((int)valveSettings.InfiniteMode);
             }
         }
 
-        public static void Import(BinaryReader reader)
+        public static void Import(BinaryReader reader, bool hasInfiniteSettings = true)
         {
             settings.Clear();
             int count = reader.ReadInt32();
@@ -268,6 +290,14 @@ namespace FluidPipes
                     Direction = (ValveDirection)reader.ReadInt32(),
                     Level = (ValveLevel)reader.ReadInt32(),
                 };
+                if (hasInfiniteSettings)
+                {
+                    valveSettings.InfiniteEnabled = reader.ReadBoolean();
+                    valveSettings.InfiniteSide = reader.ReadInt32();
+                    valveSettings.InfiniteItemId = reader.ReadInt32();
+                    valveSettings.InfiniteTarget = reader.ReadDouble();
+                    valveSettings.InfiniteMode = (InfiniteLevelMode)reader.ReadInt32();
+                }
                 if (
                     double.IsNaN(valveSettings.Rate)
                     || double.IsInfinity(valveSettings.Rate)
@@ -281,6 +311,14 @@ namespace FluidPipes
                     || (int)valveSettings.Level < 0
                     || (int)valveSettings.Level > 2
                     || settings.ContainsKey(key)
+                    || valveSettings.InfiniteSide < 0
+                    || valveSettings.InfiniteSide > 1
+                    || valveSettings.InfiniteItemId < 0
+                    || double.IsNaN(valveSettings.InfiniteTarget)
+                    || valveSettings.InfiniteTarget < 0
+                    || valveSettings.InfiniteTarget > 1
+                    || (int)valveSettings.InfiniteMode < 0
+                    || (int)valveSettings.InfiniteMode > 2
                 )
                 {
                     throw new InvalidDataException("Invalid valve settings.");

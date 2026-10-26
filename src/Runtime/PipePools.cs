@@ -20,7 +20,7 @@ namespace FluidPipes
         public double Fill => Capacity == 0 ? 0 : (double)Count / Capacity;
     }
 
-    internal static class PipePools
+    internal static partial class PipePools
     {
         private sealed class Reservoir
         {
@@ -181,6 +181,7 @@ namespace FluidPipes
             public int PolicyVersion = -1;
             public bool Dirty = true;
             public int Ticks;
+            public long Revision;
             public bool HasReservoirs;
             public bool HasUnboundPorts;
             public readonly Dictionary<int, int> ItemHints = new Dictionary<int, int>();
@@ -220,6 +221,10 @@ namespace FluidPipes
                     {
                         if (
                             storage.tankPool[tankIndex].id != tankIndex
+                            || Integration.Reservoirs.OrbitalRingCompatibility.UsesIndependentInventory(
+                                Factory,
+                                storage.tankPool[tankIndex].entityId
+                            )
                             || Removing.ContainsKey(storage.tankPool[tankIndex].entityId)
                             || !visited.Add(tankIndex)
                         )
@@ -252,6 +257,10 @@ namespace FluidPipes
                                     next > 0
                                     && next < storage.tankCursor
                                     && storage.tankPool[next].id == next
+                                    && !Integration.Reservoirs.OrbitalRingCompatibility.UsesIndependentInventory(
+                                        Factory,
+                                        storage.tankPool[next].entityId
+                                    )
                                     && !Removing.ContainsKey(storage.tankPool[next].entityId)
                                     && visited.Add(next)
                                 )
@@ -458,6 +467,7 @@ namespace FluidPipes
                 }
 
                 Version = Graph.TopologyVersion;
+                Revision++;
                 PolicyVersion = TransportItemRegistry.Version;
                 Dirty = false;
             }
@@ -641,7 +651,29 @@ namespace FluidPipes
             return pool;
         }
 
+        public static long StorageRevision(PipeGraph graph) => Get(graph)?.Revision ?? 0;
+
+        public static int StorageGroup(PipeGraph graph, int entity)
+        {
+            var state = Get(graph);
+            if (state == null)
+            {
+                return graph.View(entity).Network;
+            }
+            lock (state.Sync)
+            {
+                return Find(state, entity)?.Representative ?? 0;
+            }
+        }
+
         public static FluidPoolView Query(PipeGraph graph, int entity)
+        {
+            var inventory = QueryStorage(graph, entity);
+            PipeMachinePorts.ApplyReservation(graph, entity, ref inventory);
+            return inventory;
+        }
+
+        private static FluidPoolView QueryStorage(PipeGraph graph, int entity)
         {
             var state = Get(graph);
             if (state == null || !state.HasReservoirs)
@@ -770,6 +802,13 @@ namespace FluidPipes
 
         public static FluidPoolView View(PipeGraph graph, int entity, bool refresh = false)
         {
+            var inventory = ViewStorage(graph, entity, refresh);
+            PipeMachinePorts.ApplyReservation(graph, entity, ref inventory);
+            return inventory;
+        }
+
+        private static FluidPoolView ViewStorage(PipeGraph graph, int entity, bool refresh)
+        {
             var state = Get(graph);
             if (state == null)
             {
@@ -840,6 +879,12 @@ namespace FluidPipes
             }
         }
 
+        private static bool AcceptsInventory(PipeGraph graph, int entity)
+        {
+            return !factories.TryGetValue(graph, out var factory)
+                || PipeRuntime.HasInventory(factory, entity);
+        }
+
         public static bool Insert(
             PipeGraph graph,
             int entity,
@@ -849,7 +894,9 @@ namespace FluidPipes
         )
         {
             if (
-                !TransportItemRegistry.IsAllowed(item)
+                !AcceptsInventory(graph, entity)
+                || !TransportItemRegistry.IsAllowed(item)
+                || !PipeMachinePorts.AllowsItem(graph, entity, item)
                 || count <= 0
                 || proliferatorPoints < 0
                 || proliferatorPoints > (long)count * 10
@@ -982,7 +1029,7 @@ namespace FluidPipes
             int[] needs = null
         )
         {
-            if (max <= 0)
+            if (max <= 0 || !AcceptsInventory(graph, entity))
             {
                 return default(FluidAmount);
             }

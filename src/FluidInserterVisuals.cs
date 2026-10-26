@@ -21,7 +21,6 @@ namespace FluidPipes
             public int Grade;
             public bool HasShape;
             public bool Dirty;
-            public bool Error;
 
             public void Set(FluidInserterMesh.Socket source, FluidInserterMesh.Socket destination)
             {
@@ -74,7 +73,6 @@ namespace FluidPipes
 
         private static PlanetFactory current;
         private static readonly Dictionary<int, Shape> shapes = new Dictionary<int, Shape>();
-        private static readonly List<Shape> previews = new List<Shape>();
         private static readonly Plane[] planes = new Plane[6];
         private static readonly FieldInfo instBuffer = AccessTools.Field(
             typeof(ObjectRenderer),
@@ -85,12 +83,10 @@ namespace FluidPipes
             "pose2Buffer"
         );
         private static Material dark;
-        private static Material preview;
+        private static Material casing;
         private static readonly Material[] accents = new Material[5];
-        private static readonly MaterialPropertyBlock previewProperties =
-            new MaterialPropertyBlock();
-        private static int previewFrame = -1;
-        private static int previewCount;
+        private static readonly Material[] arrows = new Material[5];
+        private static readonly MaterialPropertyBlock arrowProperties = new MaterialPropertyBlock();
         public static int Rebuilds { get; private set; }
         public static int Count => shapes.Count;
 
@@ -224,29 +220,29 @@ namespace FluidPipes
                 }
                 return new FluidInserterMesh.Socket { Position = position + up * 0.10f };
             }
-            var rotation =
-                target > 0 ? factory.entityPool[target].rot : factory.prebuildPool[-target].rot;
-            var axis = rotation * Vector3.forward;
-            foreach (int other in PipeTopology.Neighbors(factory, target))
+            var dimensions = PipeTypeRegistry.Geometry(
+                PipeRuntime.ObjectPrototype(factory, target)
+            );
+            Vector3 pipeCenter;
+            Vector3 axis;
+            if (
+                !PipeVisuals.TryGetAttachmentFrame(
+                    factory,
+                    target,
+                    position,
+                    out pipeCenter,
+                    out axis
+                )
+            )
             {
-                if (other != 0 && PipeRuntime.IsPipeObject(factory, other))
-                {
-                    var center =
-                        target > 0
-                            ? factory.entityPool[target].pos
-                            : factory.prebuildPool[-target].pos;
-                    var peer =
-                        other > 0
-                            ? factory.entityPool[other].pos
-                            : factory.prebuildPool[-other].pos;
-                    if ((peer - center).sqrMagnitude > 0.001f)
-                    {
-                        axis = (peer - center).normalized;
-                        break;
-                    }
-                }
+                var anchor =
+                    target > 0 ? factory.entityPool[target].pos : factory.prebuildPool[-target].pos;
+                var rotation =
+                    target > 0 ? factory.entityPool[target].rot : factory.prebuildPool[-target].rot;
+                pipeCenter = anchor + anchor.normalized * dimensions.CenterHeight;
+                axis = rotation * Vector3.forward;
             }
-
+            up = pipeCenter.normalized;
             var normal = Vector3.ProjectOnPlane(up, axis);
             if (normal.sqrMagnitude < 0.01f)
             {
@@ -264,21 +260,21 @@ namespace FluidPipes
             }
 
             normal.Normalize();
-            var pipeCenter = position + up * (PipeMesh.Radius + 0.06f);
             float neck = Mathf.Abs(Vector3.Dot(up, axis)) > 0.75f ? 0.22f : 0.14f;
             return new FluidInserterMesh.Socket
             {
                 Clamp = true,
+                PipeRadius = dimensions.Radius,
                 Center = pipeCenter,
                 Axis = axis,
                 Normal = normal,
-                Position = pipeCenter + normal * (PipeMesh.Radius + neck),
+                Position = pipeCenter + normal * (dimensions.Radius + neck),
             };
         }
 
         public static void Refresh(PlanetFactory factory, int obj)
         {
-            if (factory != current || obj == 0)
+            if (factory != current || obj <= 0)
             {
                 return;
             }
@@ -306,26 +302,14 @@ namespace FluidPipes
             int slotB;
             factory.ReadObjectConn(obj, 1, out _, out _, out slotA);
             factory.ReadObjectConn(obj, 0, out _, out _, out slotB);
-            if (obj > 0)
-            {
-                var entity = factory.entityPool[obj];
-                var system = factory.factorySystem;
-                var arm = system.inserterPool[entity.inserterId];
-                start = entity.pos;
-                end = system.inserterPosePool[entity.inserterId].pos2;
-                a = arm.pickTarget;
-                b = arm.insertTarget;
-                shape.Grade = arm.grade;
-            }
-            else
-            {
-                var pending = factory.prebuildPool[-obj];
-                start = pending.pos;
-                end = pending.pos2;
-                shape.Grade = LDB.items.Select(pending.protoId).prefabDesc.inserterGrade;
-                factory.ReadObjectConn(obj, 1, out _, out a, out _);
-                factory.ReadObjectConn(obj, 0, out _, out b, out _);
-            }
+            var entity = factory.entityPool[obj];
+            var system = factory.factorySystem;
+            var arm = system.inserterPool[entity.inserterId];
+            start = entity.pos;
+            end = system.inserterPosePool[entity.inserterId].pos2;
+            a = arm.pickTarget;
+            b = arm.insertTarget;
+            shape.Grade = arm.grade;
             if ((end - start).sqrMagnitude > 0.01f)
             {
                 shape.Set(
@@ -352,15 +336,7 @@ namespace FluidPipes
             }
 
             shapes.Clear();
-            foreach (var shape in previews)
-            {
-                shape.Free();
-            }
-
-            previews.Clear();
             current = null;
-            previewFrame = -1;
-            previewCount = 0;
         }
 
         public static void Dispose()
@@ -384,14 +360,6 @@ namespace FluidPipes
                             );
                         }
                     }
-                    else if (obj < 0 && current.prebuildPool[-obj].id == -obj)
-                    {
-                        var e = current.prebuildPool[-obj];
-                        if (e.modelId > 0)
-                        {
-                            manager.AlterPrebuildModel(e.modelIndex, e.modelId, -obj, e.pos, e.rot);
-                        }
-                    }
                 }
             }
 
@@ -401,9 +369,9 @@ namespace FluidPipes
                 UnityEngine.Object.Destroy(dark);
             }
 
-            if (preview != null)
+            if (casing != null)
             {
-                UnityEngine.Object.Destroy(preview);
+                UnityEngine.Object.Destroy(casing);
             }
 
             for (int index = 0; index < accents.Length; index++)
@@ -412,9 +380,14 @@ namespace FluidPipes
                 {
                     UnityEngine.Object.Destroy(accents[index]);
                 }
+                if (arrows[index] != null)
+                {
+                    UnityEngine.Object.Destroy(arrows[index]);
+                }
+                arrows[index] = null;
                 accents[index] = null;
             }
-            dark = preview = null;
+            dark = casing = null;
             NativeInserterHousing.Dispose();
         }
 
@@ -430,15 +403,17 @@ namespace FluidPipes
                 name = "FluidPipes.InserterMotor",
                 color = new Color(0.14f, 0.19f, 0.23f),
             };
-            dark.SetFloat("_Metallic", 0.65f);
+            dark.SetFloat("_Metallic", 0.05f);
             dark.SetFloat("_Glossiness", 0.5f);
-            preview = new Material(PipeVisuals.JointMaterial)
+            casing = new Material(PipeVisuals.JointMaterial)
             {
-                name = "FluidPipes.InserterPreview",
-                color = new Color(0.28f, 0.82f, 0.94f),
+                name = "FluidPipes.InserterCasing",
+                color = new Color(0.80f, 0.83f, 0.85f),
             };
-            preview.SetFloat("_Metallic", 0);
-            preview.SetFloat("_Glossiness", 0.4f);
+            casing.SetFloat("_Metallic", 0);
+            casing.SetFloat("_Glossiness", 0.46f);
+            casing.EnableKeyword("_EMISSION");
+            casing.SetColor("_EmissionColor", new Color(0.20f, 0.22f, 0.24f));
         }
 
         public static Material[] SurfaceMaterials
@@ -452,11 +427,13 @@ namespace FluidPipes
                     PipeVisuals.BodyMaterial,
                     dark,
                     GradeMaterial(3),
+                    casing,
+                    ArrowMaterial(3),
                 };
             }
         }
 
-        private static Material GradeMaterial(int grade)
+        internal static Material GradeMaterial(int grade)
         {
             grade = Math.Max(1, Math.Min(4, grade));
             if (accents[grade] != null)
@@ -464,23 +441,72 @@ namespace FluidPipes
                 return accents[grade];
             }
 
-            var color =
-                grade == 1 ? new Color(0.95f, 0.72f, 0.18f)
-                : grade == 2 ? new Color(0.27f, 0.78f, 0.35f)
-                : grade == 3 ? new Color(0.16f, 0.56f, 0.94f)
-                : new Color(0.88f, 0.91f, 0.94f);
+            var nativeMaterial = LDB.items.Select(2010 + grade).prefabDesc.lodMaterials[0][0];
             var material = new Material(PipeVisuals.JointMaterial)
             {
                 name = "FluidPipes.InserterGrade" + grade,
-                color = color,
+                color = nativeMaterial.GetColor("_Color"),
             };
-            material.SetFloat("_Metallic", 0.30f);
+            material.SetFloat("_Metallic", 0);
             material.SetFloat("_Glossiness", 0.6f);
+            material.EnableKeyword("_EMISSION");
+            material.SetColor("_EmissionColor", material.color * 0.18f);
             accents[grade] = material;
             return material;
         }
 
-        private static void DrawShape(Shape shape, Camera camera, bool ghost)
+        internal static Material ArrowMaterial(int grade)
+        {
+            grade = Math.Max(1, Math.Min(4, grade));
+            if (arrows[grade] == null)
+            {
+                var nativeArrow = LDB.items.Select(2010 + grade).prefabDesc.lodMaterials[0][1];
+                // Direction markers retain their native grade color under factory shadows.
+                arrows[grade] = new Material(Shader.Find("Unlit/Color"))
+                {
+                    name = "FluidPipes.InserterArrow" + grade,
+                    color = nativeArrow.GetColor("_TintColor"),
+                };
+            }
+            return arrows[grade];
+        }
+
+        internal static float PowerRatio(PlanetFactory factory, int entityId)
+        {
+            var power = factory.powerSystem;
+            int consumerId = factory.entityPool[entityId].powerConId;
+            if (
+                power?.consumerPool == null
+                || consumerId <= 0
+                || consumerId >= power.consumerPool.Length
+                || power.consumerPool[consumerId].id != consumerId
+                || power.consumerPool[consumerId].entityId != entityId
+            )
+            {
+                return 0;
+            }
+            int networkId = power.consumerPool[consumerId].networkId;
+            if (
+                networkId <= 0
+                || power.networkServes == null
+                || networkId >= power.networkServes.Length
+            )
+            {
+                return 0;
+            }
+            float supplied = power.networkServes[networkId];
+            return float.IsNaN(supplied) ? 0 : Mathf.Clamp01(supplied);
+        }
+
+        internal static Color ArrowColor(int grade, float powerRatio)
+        {
+            Color color =
+                ArrowMaterial(grade).color * Mathf.Lerp(0.4f, 1.8f, Mathf.Clamp01(powerRatio));
+            color.a = 1;
+            return color;
+        }
+
+        private static void DrawShape(Shape shape, Camera camera, int entityId)
         {
             if (!shape.HasShape)
             {
@@ -521,22 +547,19 @@ namespace FluidPipes
 
             var transform = Matrix4x4.Translate(shape.Origin);
             var lighting = PipeVisuals.SteelLighting(shape.Up);
-            if (ghost)
-            {
-                previewProperties.SetColor(
-                    "_Color",
-                    shape.Error ? new Color(0.95f, 0.25f, 0.18f) : new Color(0.28f, 0.82f, 0.94f)
-                );
-                lighting = previewProperties;
-            }
-            for (int index = 0; index < 4; index++)
+            arrowProperties.SetColor(
+                "_Color",
+                ArrowColor(shape.Grade, PowerRatio(current, entityId))
+            );
+            for (int index = 0; index < FluidInserterMesh.MaterialCount; index++)
             {
                 var material =
-                    ghost ? preview
-                    : index == 0 ? PipeVisuals.JointMaterial
+                    index == 0 ? PipeVisuals.JointMaterial
                     : index == 1 ? PipeVisuals.BodyMaterial
                     : index == 2 ? dark
-                    : GradeMaterial(shape.Grade);
+                    : index == 3 ? GradeMaterial(shape.Grade)
+                    : index == 4 ? casing
+                    : ArrowMaterial(shape.Grade);
                 Graphics.DrawMesh(
                     shape.Mesh,
                     transform,
@@ -544,21 +567,16 @@ namespace FluidPipes
                     0,
                     camera,
                     index,
-                    lighting,
+                    index == FluidInserterMesh.ArrowMaterialIndex ? arrowProperties : lighting,
                     ShadowCastingMode.Off,
                     false
                 );
             }
-            DrawHousing(shape.Source, shape.Grade, camera, ghost);
-            DrawHousing(shape.Destination, shape.Grade, camera, ghost);
+            DrawHousing(shape.Source, shape.Grade, camera);
+            DrawHousing(shape.Destination, shape.Grade, camera);
         }
 
-        private static void DrawHousing(
-            FluidInserterMesh.Socket socket,
-            int grade,
-            Camera camera,
-            bool ghost
-        )
+        private static void DrawHousing(FluidInserterMesh.Socket socket, int grade, Camera camera)
         {
             if (!socket.Machine && !socket.Belt)
             {
@@ -574,11 +592,11 @@ namespace FluidPipes
             Graphics.DrawMesh(
                 housing.Mesh,
                 pose,
-                ghost ? preview : housing.Material,
+                housing.Material,
                 0,
                 camera,
                 0,
-                ghost ? previewProperties : null,
+                PipeVisuals.SteelLighting(socket.Anchor),
                 ShadowCastingMode.Off,
                 false
             );
@@ -603,91 +621,29 @@ namespace FluidPipes
                         Refresh(factory, system.inserterPool[entityId2].entityId);
                     }
                 }
-
-                for (int entityId3 = 1; entityId3 < factory.prebuildCursor; entityId3++)
-                {
-                    if (factory.prebuildPool[entityId3].id == entityId3)
-                    {
-                        Refresh(factory, -entityId3);
-                    }
-                }
             }
             Materials();
             GeometryUtility.CalculateFrustumPlanes(camera, planes);
             foreach (var entry in shapes)
             {
-                DrawShape(entry.Value, camera, entry.Key < 0);
-            }
-
-            if (previewFrame == Time.frameCount)
-            {
-                for (int index = 0; index < previewCount; index++)
-                {
-                    DrawShape(previews[index], camera, true);
-                }
-            }
-        }
-
-        internal static bool IsPreview(PlanetFactory factory, BuildPreview item) =>
-            item.desc != null
-            && item.desc.isInserter
-            && (
-                PipeRuntime.IsPipeObject(factory, item.inputObjId)
-                || PipeRuntime.IsPipeObject(factory, item.outputObjId)
-                || item.input?.item?.ID == Prototypes.ItemId
-                || item.output?.item?.ID == Prototypes.ItemId
-            );
-
-        internal static void Preview(BuildTool_Inserter tool)
-        {
-            previewFrame = Time.frameCount;
-            previewCount = 0;
-            foreach (var item in tool.buildPreviews)
-            {
-                if (IsPreview(tool.factory, item) && (item.lpos2 - item.lpos).sqrMagnitude > 0.01f)
-                {
-                    if (previewCount == previews.Count)
-                    {
-                        previews.Add(new Shape());
-                    }
-
-                    var shape = previews[previewCount++];
-                    shape.Error = item.condition != EBuildCondition.Ok;
-                    shape.Grade = item.desc.inserterGrade;
-                    shape.Set(
-                        ResolveSocket(
-                            tool.factory,
-                            item.inputObjId,
-                            item.inputFromSlot,
-                            item.lpos,
-                            item.lpos2
-                        ),
-                        ResolveSocket(
-                            tool.factory,
-                            item.outputObjId,
-                            item.outputToSlot,
-                            item.lpos2,
-                            item.lpos
-                        )
-                    );
-                }
+                DrawShape(entry.Value, camera, entry.Key);
             }
         }
 
         internal static void Hide(InserterRenderer renderer, int index, int objId, bool setBuffer)
         {
             var factory = renderer.manager?.activeFactory;
-            if (factory == null || index <= 0 || index >= renderer.instPool.Length)
+            if (
+                renderer.isPrebuild
+                || factory == null
+                || index <= 0
+                || index >= renderer.instPool.Length
+            )
             {
                 return;
             }
 
             int obj = objId & 0xFFFFFF;
-            if (renderer.isPrebuild)
-            {
-                obj = -obj;
-            }
-
             Refresh(factory, obj);
             if (!UsesPipe(factory, obj))
             {
@@ -863,42 +819,6 @@ namespace FluidPipes
         {
             FluidInserterChanges.PendingConnection(__instance, objId);
             FluidInserterChanges.PendingConnection(__instance, __state);
-        }
-    }
-
-    [HarmonyPatch(typeof(BuildTool_Inserter), nameof(BuildTool_Inserter.UpdatePreviewModels))]
-    internal static class FluidInserterPreview
-    {
-        [HarmonyPrefix]
-        public static void Before(BuildTool_Inserter __instance, out List<BuildPreview> __state)
-        {
-            __state = null;
-            foreach (var item in __instance.buildPreviews)
-            {
-                if (item.needModel && FluidInserterVisuals.IsPreview(__instance.factory, item))
-                {
-                    if (__state == null)
-                    {
-                        __state = new List<BuildPreview>();
-                    }
-                    __state.Add(item);
-                    item.needModel = false;
-                    item.previewIndex = -1;
-                }
-            }
-        }
-
-        [HarmonyPostfix]
-        public static void After(BuildTool_Inserter __instance, List<BuildPreview> __state)
-        {
-            if (__state != null)
-            {
-                foreach (var item in __state)
-                {
-                    item.needModel = true;
-                }
-            }
-            FluidInserterVisuals.Preview(__instance);
         }
     }
 }

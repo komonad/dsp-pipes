@@ -13,10 +13,19 @@ namespace FluidPipes
             "WriteObjectConnDirect"
         );
 
+        private static int SlotCount(PlanetFactory factory, int objectId)
+        {
+            // Connection storage follows the allocated owner pool; overhaul mods can extend its stride.
+            return objectId > 0
+                ? factory.entityConnPool.Length / factory.entityPool.Length
+                : factory.prebuildConnPool.Length / factory.prebuildPool.Length;
+        }
+
         public static void MoveObject(PlanetFactory factory, int oldId, int newId)
         {
             PipeTopology.Move(factory, oldId, newId);
-            for (int slot = 0; slot < 16; slot++)
+            int slotCount = SlotCount(factory, oldId);
+            for (int slot = 0; slot < slotCount; slot++)
             {
                 factory.ReadObjectConn(
                     oldId,
@@ -44,8 +53,8 @@ namespace FluidPipes
             }
             Array.Clear(
                 oldId > 0 ? factory.entityConnPool : factory.prebuildConnPool,
-                Math.Abs(oldId) * 16,
-                16
+                Math.Abs(oldId) * slotCount,
+                slotCount
             );
         }
 
@@ -57,7 +66,7 @@ namespace FluidPipes
             int otherSlot
         )
         {
-            if (other == 0 || otherSlot < 0 || otherSlot >= 16)
+            if (other == 0 || otherSlot < 0 || otherSlot >= SlotCount(factory, other))
             {
                 return false;
             }
@@ -78,6 +87,54 @@ namespace FluidPipes
             return back == entityId && backSlot == slot;
         }
 
+        internal static bool TryReadNativeLink(
+            PlanetFactory factory,
+            int entityId,
+            int slot,
+            out bool output,
+            out int otherEntityId
+        )
+        {
+            output = false;
+            otherEntityId = 0;
+            if (slot < 0 || slot >= 4 || !PipeRuntime.IsPipeObject(factory, entityId))
+            {
+                return false;
+            }
+
+            factory.ReadObjectConn(entityId, slot, out output, out int other, out int otherSlot);
+            if (
+                !PipeRuntime.IsPipeObject(factory, other)
+                || otherSlot < 0
+                || otherSlot >= 4
+                || !PipeTypeRegistry.Compatible(
+                    PipeRuntime.ObjectPrototype(factory, entityId),
+                    PipeRuntime.ObjectPrototype(factory, other)
+                )
+                || !Reciprocal(factory, entityId, slot, other, otherSlot)
+            )
+            {
+                return false;
+            }
+
+            factory.ReadObjectConn(other, otherSlot, out bool otherOutput, out _, out _);
+            if (otherOutput == output)
+            {
+                return false;
+            }
+
+            if (
+                !PipeTypeRegistry.IsUndirected(PipeRuntime.ObjectPrototype(factory, entityId))
+                && (output != (slot == 0) || otherOutput != (otherSlot == 0))
+            )
+            {
+                return false;
+            }
+
+            otherEntityId = other;
+            return true;
+        }
+
         public static void RepairImported(PlanetFactory factory, bool legacy)
         {
             var graph = PipeRuntime.Bind(factory.cargoTraffic);
@@ -95,7 +152,7 @@ namespace FluidPipes
                     factory.ReadObjectConn(entityId, slot, out _, out int other, out int otherSlot);
                     if (other != 0 && !Reciprocal(factory, entityId, slot, other, otherSlot))
                     {
-                        factory.entityConnPool[entityId * 16 + slot] = 0;
+                        factory.entityConnPool[entityId * SlotCount(factory, entityId) + slot] = 0;
                         slots++;
                     }
                 }
@@ -197,8 +254,12 @@ namespace FluidPipes
         {
             if (
                 firstEntityId == secondEntityId
+                || !PipeTypeRegistry.IsUndirected(
+                    PipeRuntime.ObjectPrototype(factory, firstEntityId)
+                )
                 || !PipeRuntime.CanLink(factory, firstEntityId, secondEntityId)
-                || !PipeTopology.Compatible(factory, firstEntityId, secondEntityId)
+                || PipeRuntime.HasInventory(factory, firstEntityId)
+                    && !PipeTopology.Compatible(factory, firstEntityId, secondEntityId)
             )
             {
                 return false;
@@ -270,7 +331,13 @@ namespace FluidPipes
                 PipeRuntime.UseObjectLinks(factory.cargoTraffic, secondEntityId);
             }
 
-            if (Array.IndexOf(PipeTopology.Neighbors(factory, firstEntityId), secondEntityId) < 0)
+            bool undirected = PipeTypeRegistry.IsUndirected(
+                PipeRuntime.ObjectPrototype(factory, firstEntityId)
+            );
+            bool connected = undirected
+                ? PipeTopology.Adjacent(factory, firstEntityId, secondEntityId)
+                : NativeAdjacent(factory, firstEntityId, secondEntityId);
+            if (!connected)
             {
                 return false;
             }
@@ -293,11 +360,56 @@ namespace FluidPipes
                 PipeRuntime.Bind(factory.cargoTraffic).Disconnect(firstEntityId, secondEntityId);
             }
 
+            if (!undirected)
+            {
+                RebuildNativePath(factory, firstEntityId);
+                RebuildNativePath(factory, secondEntityId);
+            }
+
             Reconcile(factory, firstEntityId);
             Reconcile(factory, secondEntityId);
             PipeVisuals.Dirty(factory, firstEntityId);
             PipeVisuals.Dirty(factory, secondEntityId);
             return true;
+        }
+
+        private static bool NativeAdjacent(PlanetFactory factory, int entityId, int otherEntityId)
+        {
+            for (int slot = 0; slot < 4; slot++)
+            {
+                if (
+                    TryReadNativeLink(factory, entityId, slot, out _, out int neighbor)
+                    && neighbor == otherEntityId
+                )
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static void RebuildNativePath(PlanetFactory factory, int entityId)
+        {
+            if (entityId <= 0 || !PipeRuntime.IsPipeObject(factory, entityId))
+            {
+                return;
+            }
+
+            int beltId = factory.entityPool[entityId].beltId;
+            if (!PipeRuntime.IsPipe(factory.cargoTraffic, beltId))
+            {
+                return;
+            }
+
+            NativeLinks(
+                factory.cargoTraffic,
+                entityId,
+                out int output,
+                out int input0,
+                out int input1,
+                out int input2
+            );
+            factory.cargoTraffic.AlterBeltConnections(beltId, output, input0, input1, input2);
         }
 
         public static void NativeLinks(
@@ -314,7 +426,7 @@ namespace FluidPipes
             for (int slot = 0; slot < 4; slot++)
             {
                 factory.ReadObjectConn(entity, slot, out _, out int other, out int otherSlot);
-                if (other <= 0 || !PipeRuntime.IsPipeObject(factory, other))
+                if (other <= 0 || !TryReadNativeLink(factory, entity, slot, out _, out other))
                 {
                     continue;
                 }
@@ -364,12 +476,16 @@ namespace FluidPipes
 
             PipeRuntime.UseObjectLinks(traffic, entity);
             PipeRuntime.Sync(traffic, belt);
-            if (traffic.beltPool[belt].segPathId > 0)
+            if (
+                traffic.beltPool[belt].segPathId > 0
+                && PipeTypeRegistry.IsUndirected(factory.entityPool[entity].protoId)
+            )
             {
                 traffic.AlterBeltConnections(belt, 0, 0, 0, 0);
             }
 
             PipeVisuals.Dirty(factory, entity);
+            API.PipeTypes.Changed(factory, entity);
         }
     }
 
@@ -382,7 +498,7 @@ namespace FluidPipes
         ]
         public static void Previews(BuildTool_Path __instance)
         {
-            if (__instance.handItem?.ID != Prototypes.ItemId)
+            if (!PipeTypeRegistry.IsUndirected(__instance.handItem?.ID))
             {
                 return;
             }
@@ -417,7 +533,7 @@ namespace FluidPipes
         [HarmonyPostfix, HarmonyPatch(typeof(BuildTool_Path), nameof(BuildTool_Path.UpdateGizmos))]
         public static void Gizmos(BuildTool_Path __instance, BuildModel model)
         {
-            if (__instance.handItem?.ID != Prototypes.ItemId)
+            if (!PipeTypeRegistry.IsUndirected(__instance.handItem?.ID))
             {
                 return;
             }
@@ -456,6 +572,7 @@ namespace FluidPipes
             if (
                 !PipeRuntime.IsPipeObject(__instance, objId)
                 || !PipeRuntime.IsPipeObject(__instance, otherObjId)
+                || !PipeTypeRegistry.IsUndirected(PipeRuntime.ObjectPrototype(__instance, objId))
             )
             {
                 return true;
@@ -463,6 +580,25 @@ namespace FluidPipes
 
             PipeConnections.Connect(__instance, objId, otherObjId, slot, otherSlot);
             return false;
+        }
+
+        [HarmonyPostfix, HarmonyPatch(typeof(PlanetFactory), nameof(PlanetFactory.WriteObjectConn))]
+        public static void Written(PlanetFactory __instance, int objId, int otherObjId)
+        {
+            RefreshDirected(__instance, objId);
+            RefreshDirected(__instance, otherObjId);
+        }
+
+        private static void RefreshDirected(PlanetFactory factory, int entityId)
+        {
+            if (
+                entityId > 0
+                && PipeRuntime.IsPipeObject(factory, entityId)
+                && !PipeTypeRegistry.IsUndirected(PipeRuntime.ObjectPrototype(factory, entityId))
+            )
+            {
+                PipeConnections.Reconcile(factory, entityId);
+            }
         }
 
         [HarmonyPrefix, HarmonyPatch(typeof(PlanetFactory), "ClearObjectConnDirect")]
@@ -493,8 +629,12 @@ namespace FluidPipes
         {
             if (__state != 0)
             {
+                RefreshDirected(__instance, objId);
+                RefreshDirected(__instance, __state);
                 PipeVisuals.Dirty(__instance, objId);
                 PipeVisuals.Dirty(__instance, __state);
+                API.PipeTypes.Changed(__instance, objId);
+                API.PipeTypes.Changed(__instance, __state);
             }
         }
 
@@ -539,7 +679,7 @@ namespace FluidPipes
         ]
         public static bool Built(PlanetFactory __instance, int oldId, int newId)
         {
-            if (!PipeRuntime.IsPipeObject(__instance, oldId))
+            if (!PipeTypeRegistry.IsUndirected(PipeRuntime.ObjectPrototype(__instance, oldId)))
             {
                 return true;
             }
@@ -655,7 +795,7 @@ namespace FluidPipes
                 return false;
             }
 
-            if (tool.handItem?.ID != Prototypes.ItemId)
+            if (!PipeTypeRegistry.IsUndirected(tool.handItem?.ID))
             {
                 return true;
             }
@@ -688,7 +828,7 @@ namespace FluidPipes
         private static int Filter(BuildTool_Path tool, UnityEngine.Collider[] colliders, int count)
         {
             if (
-                tool.handItem?.ID != Prototypes.ItemId
+                !PipeTypeRegistry.IsUndirected(tool.handItem?.ID)
                 || !PipeRuntime.IsPipeObject(tool.factory, tool.startObjectId)
                     && !PipeRuntime.IsPipeObject(tool.factory, tool.castObjectId)
             )
@@ -730,12 +870,36 @@ namespace FluidPipes
             int mask,
             UnityEngine.QueryTriggerInteraction query,
             BuildTool_Path tool
-        ) =>
-            Filter(
+        )
+        {
+            if (PipePlanning.TryCollisionGeometry(tool, mask, out var geometry))
+            {
+                pos = PipePlanning.CollisionCenter(pos, geometry);
+                radius = PipePlanning.CollisionRadius(geometry);
+                if (tool.buildPreviews.Count == 1)
+                {
+                    var direction = tool.buildPreviews[0].lrot * UnityEngine.Vector3.forward;
+                    float halfLength = 0.35f * geometry.Radius / PipeMesh.Radius;
+                    return Filter(
+                        tool,
+                        results,
+                        UnityEngine.Physics.OverlapCapsuleNonAlloc(
+                            pos - direction * halfLength,
+                            pos + direction * halfLength,
+                            radius,
+                            results,
+                            mask,
+                            query
+                        )
+                    );
+                }
+            }
+            return Filter(
                 tool,
                 results,
                 UnityEngine.Physics.OverlapSphereNonAlloc(pos, radius, results, mask, query)
             );
+        }
 
         public static int Capsule(
             UnityEngine.Vector3 start,
@@ -745,12 +909,20 @@ namespace FluidPipes
             int mask,
             UnityEngine.QueryTriggerInteraction query,
             BuildTool_Path tool
-        ) =>
-            Filter(
+        )
+        {
+            if (PipePlanning.TryCollisionGeometry(tool, mask, out var geometry))
+            {
+                start = PipePlanning.CollisionCenter(start, geometry);
+                end = PipePlanning.CollisionCenter(end, geometry);
+                radius = PipePlanning.CollisionRadius(geometry);
+            }
+            return Filter(
                 tool,
                 results,
                 UnityEngine.Physics.OverlapCapsuleNonAlloc(start, end, radius, results, mask, query)
             );
+        }
 
         public static void SetCondition(
             BuildPreview preview,
@@ -759,7 +931,7 @@ namespace FluidPipes
         )
         {
             if (
-                tool.handItem?.ID == Prototypes.ItemId
+                PipeTypeRegistry.IsUndirected(tool.handItem?.ID)
                 && DirectionOnly(condition)
                 && (
                     HasRoom(tool)
@@ -857,7 +1029,7 @@ namespace FluidPipes
 
         public static void Collect(BuildTool_Path tool)
         {
-            if (tool.handItem?.ID != Prototypes.ItemId)
+            if (!PipeTypeRegistry.IsItem(tool.handItem?.ID))
             {
                 GC.Collect();
             }

@@ -10,6 +10,53 @@ namespace FluidPipes
         public Mesh Mesh;
         public Material Material;
         private static readonly NativeInserterHousing[] cache = new NativeInserterHousing[10];
+        private static readonly Texture2D[] paintedTextures = new Texture2D[5];
+
+        private static Texture2D PaintTexture(int grade, Material native)
+        {
+            if (paintedTextures[grade] != null)
+            {
+                return paintedTextures[grade];
+            }
+            var source = native.GetTexture("_MainTex");
+            var target = RenderTexture.GetTemporary(
+                source.width,
+                source.height,
+                0,
+                RenderTextureFormat.ARGB32,
+                RenderTextureReadWrite.sRGB
+            );
+            var previous = RenderTexture.active;
+            var texture = new Texture2D(source.width, source.height, TextureFormat.RGBA32, true);
+            try
+            {
+                Graphics.Blit(source, target);
+                RenderTexture.active = target;
+                texture.ReadPixels(new Rect(0, 0, source.width, source.height), 0, 0);
+                var pixels = texture.GetPixels();
+                Color tint = native.GetColor("_Color").linear;
+                float multiplier = native.GetFloat("_AlbedoMultiplier");
+                for (int index = 0; index < pixels.Length; index++)
+                {
+                    // Native inserter albedo alpha encodes the grade-paint mask.
+                    float mask = Mathf.Clamp01((pixels[index].a - 0.1f) * 1.25f);
+                    Color albedo =
+                        pixels[index].linear * Color.Lerp(Color.white, tint, mask) * multiplier;
+                    pixels[index] = albedo.gamma;
+                    pixels[index].a = 1;
+                }
+                texture.SetPixels(pixels);
+                texture.name = "FluidPipes.InserterHousingPaint" + grade;
+                texture.Apply(true, true);
+                paintedTextures[grade] = texture;
+                return texture;
+            }
+            finally
+            {
+                RenderTexture.active = previous;
+                RenderTexture.ReleaseTemporary(target);
+            }
+        }
 
         public static NativeInserterHousing Get(int grade, bool machine = true)
         {
@@ -106,17 +153,33 @@ namespace FluidPipes
             };
             mesh.SetTriangles(indices, 0);
             mesh.RecalculateBounds();
-            var material = new Material(desc.lodMaterials[0][0])
+            var nativeMaterial = desc.lodMaterials[0][0];
+            var material = new Material(Shader.Find("Standard"))
             {
                 name = "FluidPipes.NativeInserterHousing" + grade,
+                color = Color.white,
             };
-            material.DisableKeyword("_ENABLE_VFINST");
-            material.SetFloat("_ToggleVerta", 0);
+            material.SetTexture("_MainTex", PaintTexture(grade, nativeMaterial));
+            material.SetTexture("_MetallicGlossMap", nativeMaterial.GetTexture("_MS_Tex"));
+            material.EnableKeyword("_METALLICGLOSSMAP");
+            material.SetFloat("_Metallic", 1);
+            material.SetFloat("_GlossMapScale", 0.5f);
+            material.SetTexture("_EmissionMap", paintedTextures[grade]);
+            material.SetColor("_EmissionColor", new Color(0.20f, 0.21f, 0.22f));
+            material.EnableKeyword("_EMISSION");
             return cache[key] = new NativeInserterHousing { Mesh = mesh, Material = material };
         }
 
         public static void Dispose()
         {
+            for (int grade = 1; grade < paintedTextures.Length; grade++)
+            {
+                if (paintedTextures[grade] != null)
+                {
+                    UnityEngine.Object.Destroy(paintedTextures[grade]);
+                    paintedTextures[grade] = null;
+                }
+            }
             for (int index = 0; index < cache.Length; index++)
             {
                 if (cache[index] != null)

@@ -22,8 +22,17 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
     private static long refundInc;
     private static Func<long> allocationCounter;
 
+    private void Awake()
+    {
+        AudioListener.volume = 0;
+        AudioListener.pause = true;
+        SubscribePipeTypeChecks();
+    }
+
     private void Update()
     {
+        AudioListener.volume = 0;
+        AudioListener.pause = true;
         if (started || !Prototypes.Ready || UIRoot.instance == null)
             return;
         started = true;
@@ -39,6 +48,7 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
 
     private void Test(string name, Action run)
     {
+        Logger.LogInfo("Starting check: " + name);
         try
         {
             run();
@@ -71,6 +81,10 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
             Test(
                 "orthographic valve icon",
                 () => PipeIconRender.Render(Path.GetDirectoryName(Info.Location), true)
+            );
+            Test(
+                "orthographic copper icon",
+                () => PipeIconRender.Render(Path.GetDirectoryName(Info.Location), copper: true)
             );
             File.WriteAllLines(
                 Path.Combine(Path.GetDirectoryName(Info.Location), "results.txt"),
@@ -268,6 +282,23 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
         Test("core in Unity Mono", () => results.Add(CoreSuite.Run(false)));
         Test("documented public API", ApiDocumentation);
         Test("public API and configurable item transport", ApiIntegration);
+        Test("registered pipe type definitions and lifecycle", PipeTypeRegistration);
+        Test("typed pipe inventory and connection families", PipeTypeInventory);
+        Test("directed structural topology and persistence", DirectedPipeTypeTopology);
+        Test("completed connection notifications", PipeTypeNotifications);
+        Test("extension appearance resources and draw effects", PipeTypeAppearance);
+        yield return null;
+        Test("extension material resource release", PipeTypeAppearanceRelease);
+        if (Environment.GetEnvironmentVariable("FluidPipesExternalConsumers") == "0")
+        {
+            Test("standalone library without external consumers", StandalonePipeLibrary);
+        }
+        else
+        {
+            Test("external CopperPipes consumer", CopperPipesConsumer);
+        }
+        Test("optional machine ports on a large pipe network", MachinePortIntegration);
+        Test("procedural machine port geometry", MachinePortGeometry);
         yield return null;
         Test("patched native I/O", Integration);
         Test("native construction and path mutations", Construction);
@@ -283,6 +314,8 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
         Test("pipe selection without native render batches", Selection);
         Test("procedural pipe geometry", Geometry);
         Test("raised fluid inserter geometry", FluidInserterGeometry);
+        Test("native inserter colors and support continuity", InserterAppearanceGeometry);
+        Test("inserter attachment centerlines", PipeAttachmentGeometry);
         Test("opaque fittings behind transparent pipes", MetalOcclusion);
         Test(
             "procedural pipe gallery",
@@ -329,6 +362,7 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
             }
         );
         Test("liquid render cache", RenderCache);
+        Test("native fluid palette and HDR tint upload", FluidColors);
         Test("native I/O benchmark", Benchmark);
         Test("large shared-container I/O benchmark", SharedLargeBenchmark);
         Test("native inserter workload", Inserters);
@@ -874,7 +908,7 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
         Check(
             view.Count == 1000
                 && view.ProliferatorPoints == 4000
-                && view.Capacity == 10010000
+                && view.Capacity == size * PipeGraph.SegmentCapacity + 10000
                 && graph.TopologyVisits == visits,
             "100000-node shared storage I/O preserves stock without topology traversal"
         );
@@ -911,14 +945,14 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
         };
         var view = PipePools.View(graph, 1, true);
         Check(
-            view.Capacity == 11000 && graph.View(1).Count == 400 && tanks[1].fluidCount == 4000,
+            view.Capacity == 10100 && graph.View(1).Count == 43 && tanks[1].fluidCount == 4357,
             "tank and pipe capacity share a common fill percentage"
         );
         tanks[1].GameTick(factory);
         tanks[1].isOutput0 = true;
         tanks[1].GameTick(factory);
         Check(
-            tanks[1].fluidCount == 4000 && graph.View(1).Count == 400,
+            tanks[1].fluidCount == 4357 && graph.View(1).Count == 43,
             "native tank port direction does not duplicate shared fluid transfers"
         );
         var station = new StationComponent
@@ -947,7 +981,7 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
         AttachStation(factory, station);
         view = PipePools.View(graph, 1, true);
         Check(
-            view.Capacity == 21000
+            view.Capacity == 20100
                 && view.Count == 5400
                 && view.ProliferatorPoints == 21600
                 && view.Containers == 2,
@@ -1029,7 +1063,7 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
         AttachStation(factory, station);
         var inventoryView = PipePools.View(graph, 1, true);
         Check(
-            inventoryView.Capacity == 4200
+            inventoryView.Capacity == 4020
                 && inventoryView.Count == 1050
                 && inventoryView.Nodes == 2
                 && inventoryView.Containers == 3
@@ -1037,12 +1071,12 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
             "tank stacks and a tower slot join disjoint pipe components once per container"
         );
         Check(
-            graph.View(1).Count == 25
-                && graph.View(2).Count == 25
-                && tanks[1].fluidCount == 250
-                && tanks[2].fluidCount == 250
-                && station.storage[0].count == 500,
-            "all connected storage volumes hold the same 25 percent fill"
+            graph.View(1).Count == 2
+                && graph.View(2).Count == 2
+                && tanks[1].fluidCount == 261
+                && tanks[2].fluidCount == 261
+                && station.storage[0].count == 524,
+            "connected storage volumes share fill with integer remainders"
         );
         int requested = 700;
         int item = 1000;
@@ -1078,7 +1112,38 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
                 "restoration counts native container stocks exactly once"
             );
         }
-        PipePools.Empty(graph, 1);
+        long currentTankCount = tanks[1].fluidCount;
+        long currentTankPoints = tanks[1].fluidInc;
+        long otherTankCount = tanks[2].fluidCount;
+        long towerCount = station.storage[0].count;
+        long pipeCount = graph.View(1).Count + graph.View(2).Count;
+        Check(
+            PipePools.EmptyTank(factory, 1)
+                && tanks[1].fluidCount == 0
+                && tanks[2].fluidCount == otherTankCount
+                && station.storage[0].count == towerCount
+                && graph.View(1).Count + graph.View(2).Count == pipeCount
+                && PipePools.TryTankInventory(factory, 1, out var remaining)
+                && remaining.Count == 500 - currentTankCount
+                && remaining.ProliferatorPoints == 2000 - currentTankPoints,
+            "current-tank clearing removes only its actual count and points before rebalancing"
+        );
+        Check(
+            PipePools.TryTankInsert(factory, 1, 1000, (int)currentTankCount, (int)currentTankPoints)
+                && !PipePools.TryTankInsert(factory, 1, 1007, 1, 0),
+            "native tank inventory access shares capacity and enforces item identity"
+        );
+        var sharedTake = PipePools.TryTankTake(factory, 1, 400, 1000);
+        Check(
+            sharedTake.Count == 400
+                && sharedTake.ProliferatorPoints == 1600
+                && PipePools.TryTankInsert(factory, 2, 1000, 400, 1600),
+            "native tank inventory access extracts beyond its local share and preserves points"
+        );
+        Check(
+            PipePools.EmptyTankNetwork(factory, 2),
+            "a connected tank can clear its shared fluid space"
+        );
         inventoryView = PipePools.View(graph, 2, true);
         Check(
             inventoryView.Count == 0
@@ -1159,7 +1224,7 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
         var view = PipePools.View(graph, 1, true);
         Check(
             view.Count == 500
-                && view.Capacity == 1100
+                && view.Capacity == 1010
                 && station.slots[0].storageIdx == 1
                 && station.storage[1].count == 0,
             "automatic input binding includes only the matching liquid storage slot"
@@ -1168,9 +1233,14 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
 
     private void Valves()
     {
-        var factory = Fixture(2, 960002, true);
+        var factory = Fixture(20, 960002, false);
         var graph = PipeRuntime.Bind(factory.cargoTraffic);
-        int entity = AddObject(factory, 3, Prototypes.ValveId);
+        for (int node = 3; node <= 20; node++)
+        {
+            PipeTopology.Connect(factory, node <= 11 ? 1 : 2, node);
+            graph.Connect(node <= 11 ? 1 : 2, node);
+        }
+        int entity = AddObject(factory, 21, Prototypes.ValveId);
         int splitter = factory.cargoTraffic.NewSplitterComponent(entity);
         factory.powerSystem = new PowerSystem(factory.planet);
         int pc = ValvePower.Ensure(factory, entity);
@@ -1180,6 +1250,41 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
             !PipePools.SameSpace(graph, 1, 2)
                 && LDB.items.Select(Prototypes.ValveId).prefabDesc.portPoses.Length == 2,
             "valve has exactly two ports and does not merge its adjacent spaces"
+        );
+        var valveDescription = LDB.items.Select(Prototypes.ValveId).prefabDesc;
+        var valveMesh = valveDescription.mesh;
+        Check(
+            valveMesh.name == "FluidPipes.Valve"
+                && valveMesh.subMeshCount == 5
+                && valveMesh.bounds.max.y < 1
+                && valveMesh.bounds.min.y > -0.1f
+                && valveDescription.lodDistances.Length == 4
+                && Math.Abs(
+                    Vector3.Distance(
+                        valveDescription.portPoses[0].position,
+                        valveDescription.portPoses[1].position
+                    ) - 1.2f
+                ) < 0.001f,
+            "procedural valve housing has two coaxial ports and stays below the next transport tier"
+        );
+        var valveVertices = valveMesh.vertices;
+        bool validTriangles = true;
+        for (int submesh = 0; submesh < valveMesh.subMeshCount; submesh++)
+        {
+            int[] indices = valveMesh.GetTriangles(submesh);
+            for (int index = 0; index < indices.Length; index += 3)
+            {
+                Vector3 firstPoint = valveVertices[indices[index]];
+                Vector3 secondPoint = valveVertices[indices[index + 1]];
+                Vector3 thirdPoint = valveVertices[indices[index + 2]];
+                validTriangles &=
+                    Vector3.Cross(secondPoint - firstPoint, thirdPoint - firstPoint).sqrMagnitude
+                    > 1e-14f;
+            }
+        }
+        Check(
+            validTriangles,
+            "valve bevels, flange bores and cap faces contain nondegenerate triangles"
         );
         graph.Insert(1, 1000, 80, 320);
         var config = PipeValves.Get(factory, entity);
@@ -1274,8 +1379,8 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
             graph.View(1).Count == 5 && graph.View(2).Count == 50,
             "native splitter logic cannot bypass valve control"
         );
-        OrdinaryBelt(factory, 4);
-        Check(!PipeRuntime.CanLink(factory, entity, 4), "valve rejects an ordinary belt");
+        OrdinaryBelt(factory, 22);
+        Check(!PipeRuntime.CanLink(factory, entity, 22), "valve rejects an ordinary belt");
         factory.WriteObjectConn(entity, 2, true, 1, 1);
         factory.ReadObjectConn(entity, 2, out _, out int illegal, out _);
         Check(illegal == 0, "valve rejects a third pipe port");
@@ -1283,6 +1388,11 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
         config.Target = 0.35;
         config.Direction = ValveDirection.BtoA;
         config.Level = ValveLevel.KeepA;
+        config.InfiniteEnabled = true;
+        config.InfiniteSide = 1;
+        config.InfiniteItemId = 1000;
+        config.InfiniteTarget = 0.9;
+        config.InfiniteMode = InfiniteLevelMode.Exactly;
         using (var stream = new MemoryStream())
         {
             PipeRuntime.Export(new BinaryWriter(stream));
@@ -1293,9 +1403,51 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
                 restored.Rate == 12.5
                     && restored.Target == 0.35
                     && restored.Direction == ValveDirection.BtoA
-                    && restored.Level == ValveLevel.KeepA,
+                    && restored.Level == ValveLevel.KeepA
+                    && restored.InfiniteEnabled
+                    && restored.InfiniteSide == 1
+                    && restored.InfiniteItemId == 1000
+                    && restored.InfiniteTarget == 0.9
+                    && restored.InfiniteMode == InfiniteLevelMode.Exactly,
                 "valve settings survive save restoration"
             );
+        }
+        foreach (int version in new[] { 4, 5 })
+        {
+            using (var stream = new MemoryStream())
+            {
+                var writer = new BinaryWriter(stream);
+                writer.Write(version);
+                writer.Write(0);
+                PipeTopology.Export(writer);
+                writer.Write(1);
+                writer.Write(((long)factory.planet.id << 32) | (uint)entity);
+                writer.Write(true);
+                writer.Write(12.5);
+                writer.Write(0.35);
+                writer.Write((int)ValveDirection.BtoA);
+                writer.Write((int)ValveLevel.KeepA);
+                if (version >= 5)
+                {
+                    writer.Write(0);
+                }
+                stream.Position = 0;
+                PipeRuntime.Import(new BinaryReader(stream));
+                var restored = PipeValves.Get(factory, entity);
+                Check(
+                    restored.Rate == 12.5
+                        && restored.Target == 0.35
+                        && restored.Direction == ValveDirection.BtoA
+                        && restored.Level == ValveLevel.KeepA
+                        && !restored.InfiniteEnabled
+                        && restored.InfiniteItemId == 0
+                        && restored.InfiniteTarget == 1
+                        && stream.Position == stream.Length,
+                    "format "
+                        + version
+                        + " valve records retain pump settings and initialize sandbox defaults"
+                );
+            }
         }
         factory.powerSystem.RemoveConsumerComponent(pc);
         factory.entityPool[entity].powerConId = 0;
@@ -1393,7 +1545,7 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
                 var vertices = mesh.vertices;
                 var normals = mesh.normals;
                 Check(
-                    mesh.subMeshCount == 4
+                    mesh.subMeshCount == FluidInserterMesh.MaterialCount
                         && vertices.All(position =>
                             !float.IsNaN(position.x)
                             && !float.IsNaN(position.y)
@@ -1412,7 +1564,7 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
                     mesh.bounds.max.y <= Math.Max(0, end.y) + FluidInserterMesh.Clearance + 0.161f,
                     "inserter body stays within its compact height envelope " + end
                 );
-                for (int material = 0; material < 4; material++)
+                for (int material = 0; material < FluidInserterMesh.MaterialCount; material++)
                 {
                     var triangles = mesh.GetTriangles(material);
                     for (int index = 0; index < triangles.Length; index += 3)
@@ -1745,7 +1897,7 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
         PipeConnections.Connect(factory, 2, 3, 0, 1);
         PipeTopology.Connect(factory, 1, 5);
         graph.Connect(1, 5);
-        graph.Insert(1, 1000, 200, 800);
+        graph.Insert(1, 1000, 20, 80);
         factory.entityConnPool[1 * 16 + 3] = -1;
         PipeConnections.RepairImported(factory, true);
         factory.ReadObjectConn(1, 3, out _, out int stale, out _);
@@ -1754,8 +1906,8 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
             "legacy restoration removes stale pending slots and unsupported remote edges"
         );
         Check(
-            graph.View(1).Count + graph.View(5).Count == 200
-                && graph.View(1).ProliferatorPoints + graph.View(5).ProliferatorPoints == 800
+            graph.View(1).Count + graph.View(5).Count == 20
+                && graph.View(1).ProliferatorPoints + graph.View(5).ProliferatorPoints == 80
                 && graph.View(1).Nodes + graph.View(5).Nodes == 4,
             "legacy restoration preserves all nodes, stock and points"
         );
@@ -1774,20 +1926,20 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
         for (int index = 1; index < 4; index++)
             factory.WriteObjectConn(index, 0, true, index + 1, 1);
         var graph = PipeRuntime.Bind(traffic);
-        graph.Insert(1, 1000, 120, 360);
+        graph.Insert(1, 1000, 12, 36);
         Check(PipeConnections.Disconnect(factory, 2, 3), "cut a native-backed pipe edge");
         Check(
             graph.View(1).Nodes == 2
                 && graph.View(4).Nodes == 2
-                && graph.View(1).Count == 60
-                && graph.View(4).Count == 60
-                && graph.View(1).ProliferatorPoints + graph.View(4).ProliferatorPoints == 360,
+                && graph.View(1).Count == 6
+                && graph.View(4).Count == 6
+                && graph.View(1).ProliferatorPoints + graph.View(4).ProliferatorPoints == 36,
             "cut partitions inventory by capacity and conserves points"
         );
         Check(
             factory.entityPool[2].id == 2
                 && factory.entityPool[3].id == 3
-                && graph.View(1).Capacity + graph.View(4).Capacity == 400,
+                && graph.View(1).Capacity + graph.View(4).Capacity == 40,
             "cut preserves both entities and total capacity"
         );
         for (int slot = 0; slot < 4; slot++)
@@ -1801,7 +1953,7 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
         Check(
             PipeConnections.Disconnect(factory, 2, 3)
                 && graph.View(1).Nodes == 4
-                && graph.View(1).Count == 120,
+                && graph.View(1).Count == 12,
             "cutting a ring edge preserves alternate connectivity"
         );
         Check(

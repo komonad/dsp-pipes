@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
     <Import Project="../Local.props" />
     <PropertyGroup>
         <TargetFramework>net472</TargetFramework>
@@ -12,7 +12,18 @@
         <Compile Include="FluidInserterScene.cs" />
         <Compile Include="MinimalFluidLineScene.cs" />
         <Compile Include="ParallelFluidLineScene.cs" />
+        <Compile Include="MachinePortScene.cs" />
+        <Compile Include="NativeUiChecks.cs" />
+        <Compile Include="FluidAppearanceScene.cs" />
+        <Compile Include="CopperInteractionScene.cs" />
+        <Compile Include="CopperIconChecks.cs" />
+        <Compile Include="DisabledContentScene.cs" />
         <ProjectReference Include="../FluidPipes.csproj" />
+        <Reference
+            Include="UnityEngine.AudioModule"
+            HintPath="$(Managed)/UnityEngine.AudioModule.dll"
+            Private="false"
+        />
     </ItemGroup>
     <ItemGroup>
         <Reference Include="Assembly-CSharp">

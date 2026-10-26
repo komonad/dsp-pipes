@@ -1,5 +1,5 @@
 $ErrorActionPreference = 'Stop'
-$version = '0.4.0'
+$version = '0.8.0'
 $assembly = Join-Path $PSScriptRoot 'bin/Release/FluidPipes.dll'
 $dist = Join-Path $PSScriptRoot 'dist'
 $archive = Join-Path $dist ('FluidPipes-' + $version + '.zip')

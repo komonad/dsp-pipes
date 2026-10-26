@@ -14,7 +14,7 @@ namespace FluidPipes.API
         public const string PluginGuid = "com.komonad.dsp.fluidpipes";
 
         /// <summary>The mod release version for minimum-version dependency declarations.</summary>
-        public const string ModVersion = "0.4.0";
+        public const string ModVersion = "0.8.0";
 
         /// <summary>The supported API contract generation.</summary>
         public const int ApiVersion = 1;
@@ -22,16 +22,21 @@ namespace FluidPipes.API
         /// <summary>Whether prototypes and the initial item policy are initialized.</summary>
         public static bool IsReady => Prototypes.Ready;
 
-        /// <summary>The registered pipe item ID, or zero before initialization.</summary>
+        /// <summary>Disables the built-in pipe, valve, recipes, technology unlocks and construction-bar entries for this process.</summary>
+        /// <remarks>Call from a dependent plugin's Awake on the Unity main thread before LDBTool prototype registration begins. Repeated calls during this phase are idempotent. External type registration, item templates and transport APIs remain available. Keep the selected content set stable for each save.</remarks>
+        /// <exception cref="InvalidOperationException">Called outside the Unity main thread or after prototype registration begins.</exception>
+        public static void DisableBuiltInItems() => Prototypes.DisableBuiltInItems();
+
+        /// <summary>The registered built-in pipe item ID, or zero before initialization or when built-in content is disabled.</summary>
         public static int PipeItemId => IsReady ? Prototypes.ItemId : 0;
 
-        /// <summary>The registered valve item ID, or zero before initialization.</summary>
+        /// <summary>The registered built-in valve item ID, or zero before initialization or when built-in content is disabled.</summary>
         public static int ValveItemId => IsReady ? Prototypes.ValveId : 0;
 
-        /// <summary>The pipe crafting recipe ID, or zero before initialization.</summary>
+        /// <summary>The built-in pipe recipe ID, or zero before initialization or when built-in content is disabled.</summary>
         public static int PipeRecipeId => IsReady ? Prototypes.RecipeId : 0;
 
-        /// <summary>The valve crafting recipe ID, or zero before initialization.</summary>
+        /// <summary>The built-in valve recipe ID, or zero before initialization or when built-in content is disabled.</summary>
         public static int ValveRecipeId => IsReady ? Prototypes.ValveRecipeId : 0;
 
         /// <summary>Tests the effective admission policy. False before item prototypes are initialized.</summary>
@@ -224,10 +229,100 @@ namespace FluidPipes.API
             return true;
         }
 
+        /// <summary>Whether direct connections to production-machine inserter slots are enabled by configuration.</summary>
+        public static bool MachinePortsEnabled => IsReady && PipeMachinePorts.Enabled;
+
+        /// <summary>Lists detached direct-machine connections on a pipe, including paused settings.</summary>
+        /// <param name="factory">The factory owning the pipe.</param>
+        /// <param name="pipeEntityId">A completed pipe entity ID.</param>
+        /// <returns>A new array of connections, or an empty array for an invalid target.</returns>
+        public static MachinePortSnapshot[] GetMachinePorts(
+            PlanetFactory factory,
+            int pipeEntityId
+        ) =>
+            IsPipe(factory, pipeEntityId)
+                ? PipeMachinePorts.Connections(factory, pipeEntityId)
+                : new MachinePortSnapshot[0];
+
+        /// <summary>Lists admitted recipe inputs and outputs available for a machine connection.</summary>
+        /// <param name="factory">The factory owning the machine.</param>
+        /// <param name="machineEntityId">A completed production-machine entity ID.</param>
+        /// <returns>A new array of item/direction choices, or an empty array for an unsupported target.</returns>
+        public static MachinePortOptions[] GetMachinePortChoices(
+            PlanetFactory factory,
+            int machineEntityId
+        ) =>
+            IsReady && factory != null
+                ? PipeMachinePorts.Choices(factory, machineEntityId)
+                : new MachinePortOptions[0];
+
+        /// <summary>Connects a pipe to a free native inserter slot after recipe, inventory and filter validation.</summary>
+        /// <param name="factory">The factory owning both entities; use the main thread or exclusive simulation access.</param>
+        /// <param name="pipeEntityId">A completed pipe entity ID.</param>
+        /// <param name="machineEntityId">A completed production-machine entity ID.</param>
+        /// <param name="slotIndex">A zero-based native inserter slot.</param>
+        /// <param name="options">The immutable direction, item filter and enable state.</param>
+        /// <returns>True when connected and configured. False for disabled integration, occupied slots or conflicts.</returns>
+        /// <exception cref="ArgumentNullException">Options is null.</exception>
+        public static bool TryConnectMachinePort(
+            PlanetFactory factory,
+            int pipeEntityId,
+            int machineEntityId,
+            int slotIndex,
+            MachinePortOptions options
+        )
+        {
+            if (options == null)
+            {
+                throw new ArgumentNullException(nameof(options));
+            }
+            return IsReady
+                && PipeMachinePorts.Connect(
+                    factory,
+                    pipeEntityId,
+                    machineEntityId,
+                    slotIndex,
+                    options
+                );
+        }
+
+        /// <summary>Changes an existing direct-machine connection after recipe and shared-space filter validation.</summary>
+        /// <param name="factory">The factory owning the connection.</param>
+        /// <param name="machineEntityId">The connected production-machine entity ID.</param>
+        /// <param name="slotIndex">The zero-based native inserter slot.</param>
+        /// <param name="options">The immutable direction, item filter and enable state.</param>
+        /// <returns>True when applied. Rejected changes preserve the current settings and inventory.</returns>
+        /// <exception cref="ArgumentNullException">Options is null.</exception>
+        public static bool TrySetMachinePortOptions(
+            PlanetFactory factory,
+            int machineEntityId,
+            int slotIndex,
+            MachinePortOptions options
+        )
+        {
+            if (options == null)
+            {
+                throw new ArgumentNullException(nameof(options));
+            }
+            return IsReady
+                && PipeMachinePorts.Configure(factory, machineEntityId, slotIndex, options);
+        }
+
+        /// <summary>Removes a direct-machine connection while retaining pipe and machine inventory.</summary>
+        /// <param name="factory">The factory owning the connection.</param>
+        /// <param name="machineEntityId">The connected production-machine entity ID.</param>
+        /// <param name="slotIndex">The zero-based native inserter slot.</param>
+        /// <returns>True when a connection was removed; removal also works while integration is disabled.</returns>
+        public static bool TryDisconnectMachinePort(
+            PlanetFactory factory,
+            int machineEntityId,
+            int slotIndex
+        ) => IsReady && PipeMachinePorts.Disconnect(factory, machineEntityId, slotIndex);
+
         private static bool Resolve(PlanetFactory factory, int entityId, out PipeGraph graph)
         {
             graph = null;
-            if (!IsPipe(factory, entityId))
+            if (!IsPipe(factory, entityId) || !PipeRuntime.HasInventory(factory, entityId))
             {
                 return false;
             }

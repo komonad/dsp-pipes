@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using CommonAPI.Systems;
+using FluidPipes.Integration.Reservoirs;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -9,7 +11,7 @@ namespace FluidPipes
     internal static class PipePanel
     {
         private static GameObject panel;
-        private static Font font;
+        private static UITankWindow inventoryWindow;
         private static Text title;
         private static Text inventory;
         private static Text status;
@@ -22,15 +24,24 @@ namespace FluidPipes
         private static InputField target;
         private static GameObject pipeControls;
         private static GameObject valveControls;
+        private static GameObject machinePortButton;
         private static PlanetFactory factory;
         private static int entity;
-        private static int page;
         private static bool valve;
         private static bool editing;
         private static float refresh;
         private static float emptyUntil;
         private static int[] peers = new int[0];
         private static readonly List<GameObject> peerButtons = new List<GameObject>();
+        private static readonly Text[] pipeValues = new Text[4];
+        private static GameObject summary;
+        private static GameObject regularValveControls;
+        private static GameObject infiniteValveControls;
+        private static Text valveModeLabel;
+        private static Text infiniteSideLabel;
+        private static Text infiniteItemLabel;
+        private static Text infiniteModeLabel;
+        private static InputField infiniteTarget;
 
         private sealed class NativeVisibility
         {
@@ -42,61 +53,45 @@ namespace FluidPipes
 
         private static readonly List<NativeVisibility> hiddenWindows = new List<NativeVisibility>();
 
+        internal static UITankWindow InventoryWindow => inventoryWindow;
+
         private static RectTransform Rect(
-            GameObject gameObject2,
+            GameObject control,
             Transform parent,
             float y,
             float height
         )
         {
-            gameObject2.layer = parent.gameObject.layer;
-            var rect = gameObject2.GetComponent<RectTransform>();
+            control.layer = parent.gameObject.layer;
+            var rect = control.GetComponent<RectTransform>();
             rect.SetParent(parent, false);
             rect.anchorMin = new Vector2(0, 1);
             rect.anchorMax = new Vector2(1, 1);
             rect.pivot = new Vector2(0.5f, 1);
-            rect.offsetMin = new Vector2(12, -y - height);
-            rect.offsetMax = new Vector2(-12, -y);
+            rect.offsetMin = new Vector2(32, -y - height);
+            rect.offsetMax = new Vector2(-32, -y);
             return rect;
         }
 
-        private static Text Label(
+        internal static Text Label(
             Transform parent,
             float y,
             float height,
             string value,
-            int size = 16
+            int size = 14
         )
         {
-            var gameObject = new GameObject("label", typeof(RectTransform), typeof(Text));
-            Rect(gameObject, parent, y, height);
-            var text2 = gameObject.GetComponent<Text>();
-            text2.font = font;
-            text2.fontSize = size;
-            text2.color = new Color(0.85f, 0.92f, 0.95f);
-            text2.text = value;
-            text2.raycastTarget = false;
-            text2.supportRichText = false;
-            return text2;
+            return NativePipeUi.Label(parent, y, height, value, size);
         }
 
-        private static Text Button(Transform parent, float y, string value, Action action)
+        internal static Text Button(Transform parent, float y, string value, Action action)
         {
-            var gameObject = new GameObject(
-                "button",
-                typeof(RectTransform),
-                typeof(Image),
-                typeof(Button)
-            );
-            Rect(gameObject, parent, y, 30);
-            var image = gameObject.GetComponent<Image>();
-            image.color = new Color(0.14f, 0.28f, 0.34f, 1);
-            var button = gameObject.GetComponent<Button>();
-            button.targetGraphic = image;
-            button.onClick.AddListener(() => action());
-            var text = Label(gameObject.transform, 3, 24, value);
-            text.alignment = TextAnchor.MiddleCenter;
-            return text;
+            bool nested =
+                parent == pipeControls?.transform
+                || parent == valveControls?.transform
+                || parent == regularValveControls?.transform
+                || parent == infiniteValveControls?.transform;
+            return NativePipeUi.Button(parent, y, value, action, nested ? 0 : 32);
         }
 
         private static InputField Input(
@@ -106,89 +101,61 @@ namespace FluidPipes
             Action<string> change
         )
         {
-            Label(parent, y, 24, label);
-            var gameObject = new GameObject(
-                "input",
-                typeof(RectTransform),
-                typeof(Image),
-                typeof(InputField)
-            );
-            Rect(gameObject, parent, y + 25, 30);
-            gameObject.GetComponent<Image>().color = new Color(0.06f, 0.12f, 0.16f, 1);
-            var text = Label(gameObject.transform, 3, 24, "");
-            text.raycastTarget = false;
-            var input = gameObject.GetComponent<InputField>();
-            input.textComponent = text;
-            input.contentType = InputField.ContentType.DecimalNumber;
-            input.onEndEdit.AddListener(value =>
-            {
-                if (!editing)
+            return NativePipeUi.Input(
+                parent,
+                y,
+                label,
+                value =>
                 {
-                    change(value);
+                    if (!editing)
+                    {
+                        change(value);
+                    }
                 }
-            });
-            return input;
+            );
         }
 
         private static void Create()
         {
-            var root = UIRoot.instance;
-            var native = root.uiGame.beltWindow.GetComponentInChildren<Text>(true);
-            font = native?.font ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            panel = new GameObject("FluidPipes.Panel", typeof(RectTransform), typeof(Image));
-            var rect = panel.GetComponent<RectTransform>();
-            rect.SetParent(root.overlayCanvas.transform, false);
-            panel.layer = root.overlayCanvas.gameObject.layer;
-            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0, 1);
-            rect.anchoredPosition = new Vector2(20, -140);
-            rect.sizeDelta = new Vector2(400, 610);
-            panel.GetComponent<Image>().color = new Color(0.035f, 0.075f, 0.10f, 0.98f);
-            title = Label(panel.transform, 12, 30, "流体管道", 20);
-            inventory = Label(panel.transform, 48, 132, "");
-            status = Label(panel.transform, 184, 48, "");
-            var close = Button(
-                panel.transform,
-                12,
-                "×",
+            inventoryWindow = NativePipeUi.Window(
+                "FluidPipes.Panel",
                 () =>
                 {
                     GameMain.mainPlayer?.controller?.actionInspect?.InspectNothing();
                     Hide();
                 }
             );
-            var closeRect = (RectTransform)close.transform.parent;
-            closeRect.anchorMin = closeRect.anchorMax = closeRect.pivot = Vector2.one;
-            closeRect.sizeDelta = new Vector2(28, 28);
-            closeRect.anchoredPosition = new Vector2(-12, -12);
-            pipeControls = new GameObject("pipe-controls", typeof(RectTransform));
-            Rect(pipeControls, panel.transform, 236, 350);
-            Button(pipeControls.transform, 0, "放入手持液体", Deposit);
-            Button(pipeControls.transform, 38, "取出一组到手上", Withdraw);
-            emptyLabel = Button(pipeControls.transform, 76, "清空全部连通液体", Empty);
-            connections = Label(pipeControls.transform, 118, 28, "");
-            for (int index2 = 0; index2 < 4; index2++)
+            NativeTankInventoryBridge.PipeWindow = inventoryWindow;
+            inventoryWindow._Create();
+            inventoryWindow._Init(GameMain.data);
+            panel = inventoryWindow.gameObject;
+            var rect = panel.GetComponent<RectTransform>();
+            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0, 1);
+            rect.anchoredPosition = new Vector2(20, -140);
+            rect.sizeDelta = new Vector2(306, 580);
+            title = inventoryWindow.titleText;
+            inventory = Label(panel.transform, 58, 88, "");
+            summary = new GameObject("pipe-summary", typeof(RectTransform));
+            Rect(summary, panel.transform, 278, 88);
+            string[] captions = { "当前管段", "管道存量", "连通容量", "管段 / 容器" };
+            for (int row = 0; row < pipeValues.Length; row++)
             {
-                int index = index2;
-                var label = Button(
-                    pipeControls.transform,
-                    150 + index2 * 36,
-                    "",
-                    () => Disconnect(index)
-                );
-                peerButtons.Add(label.transform.parent.gameObject);
+                pipeValues[row] = NativePipeUi.Property(summary.transform, row * 22, captions[row]);
             }
-            Button(
+            status = Label(panel.transform, 372, 28, "", 12);
+            pipeControls = new GameObject("pipe-controls", typeof(RectTransform));
+            Rect(pipeControls, panel.transform, 414, 220);
+            emptyLabel = Button(pipeControls.transform, 0, "清空整个液体网", Empty);
+            connections = Label(pipeControls.transform, 40, 22, "");
+            NativePipeUi.Layout((RectTransform)connections.transform, 40, 22, 0);
+            machinePortButton = Button(
                 pipeControls.transform,
-                300,
-                "下一页连接",
-                () =>
-                {
-                    page++;
-                    UpdateContents();
-                }
-            );
+                258,
+                "机器直连接口设置",
+                () => PipeMachinePortPanel.Open(factory, entity)
+            ).transform.parent.gameObject;
             valveControls = new GameObject("valve-controls", typeof(RectTransform));
-            Rect(valveControls, panel.transform, 236, 350);
+            Rect(valveControls, panel.transform, 198, 330);
             enabledLabel = Button(
                 valveControls.transform,
                 0,
@@ -200,34 +167,51 @@ namespace FluidPipes
                     UpdateContents();
                 }
             );
-            direction = Button(
+            valveModeLabel = Button(
                 valveControls.transform,
-                38,
+                36,
                 "",
                 () =>
                 {
-                    var valveSettings2 = Settings();
-                    valveSettings2.Direction = (ValveDirection)(
-                        ((int)valveSettings2.Direction + 1) % 3
+                    if (SandboxValve.Available)
+                    {
+                        Settings().InfiniteEnabled = !Settings().InfiniteEnabled;
+                        UpdateContents();
+                    }
+                }
+            );
+            regularValveControls = new GameObject("pump-settings", typeof(RectTransform));
+            regularValveControls.layer = valveControls.layer;
+            regularValveControls.transform.SetParent(valveControls.transform, false);
+            NativePipeUi.Layout((RectTransform)regularValveControls.transform, 78, 210, 0);
+            direction = Button(
+                regularValveControls.transform,
+                0,
+                "",
+                () =>
+                {
+                    var valveSettings = Settings();
+                    valveSettings.Direction = (ValveDirection)(
+                        ((int)valveSettings.Direction + 1) % 3
                     );
                     UpdateContents();
                 }
             );
             level = Button(
-                valveControls.transform,
-                76,
+                regularValveControls.transform,
+                36,
                 "",
                 () =>
                 {
-                    var valveSettings3 = Settings();
-                    valveSettings3.Level = (ValveLevel)(((int)valveSettings3.Level + 1) % 3);
+                    var valveSettings = Settings();
+                    valveSettings.Level = (ValveLevel)(((int)valveSettings.Level + 1) % 3);
                     UpdateContents();
                 }
             );
             rate = Input(
-                valveControls.transform,
-                118,
-                "最大流量（份/秒，0 为关闭）",
+                regularValveControls.transform,
+                76,
+                "最大流量（份/秒）",
                 text =>
                 {
                     if (Number(text, out double parsedValue))
@@ -238,17 +222,82 @@ namespace FluidPipes
                 }
             );
             target = Input(
-                valveControls.transform,
-                184,
+                regularValveControls.transform,
+                144,
                 "目标液位（0–100%）",
-                text2 =>
+                text =>
                 {
-                    if (Number(text2, out double parsedValue2))
+                    if (Number(text, out double parsedValue))
                     {
-                        Settings().Target = Math.Max(0, Math.Min(1, parsedValue2 / 100));
+                        Settings().Target = Math.Max(0, Math.Min(1, parsedValue / 100));
                     }
                     UpdateContents();
                 }
+            );
+            infiniteValveControls = new GameObject("infinite-settings", typeof(RectTransform));
+            infiniteValveControls.layer = valveControls.layer;
+            infiniteValveControls.transform.SetParent(valveControls.transform, false);
+            NativePipeUi.Layout((RectTransform)infiniteValveControls.transform, 78, 180, 0);
+            infiniteSideLabel = Button(
+                infiniteValveControls.transform,
+                0,
+                "",
+                () =>
+                {
+                    Settings().InfiniteSide = 1 - Settings().InfiniteSide;
+                    UpdateContents();
+                }
+            );
+            infiniteItemLabel = Button(infiniteValveControls.transform, 36, "", PickInfiniteFluid);
+            infiniteModeLabel = Button(
+                infiniteValveControls.transform,
+                72,
+                "",
+                () =>
+                {
+                    Settings().InfiniteMode = (InfiniteLevelMode)(
+                        ((int)Settings().InfiniteMode + 1) % 3
+                    );
+                    UpdateContents();
+                }
+            );
+            infiniteTarget = Input(
+                infiniteValveControls.transform,
+                110,
+                "目标液位（0–100%）",
+                text =>
+                {
+                    if (Number(text, out double value))
+                    {
+                        Settings().InfiniteTarget = Math.Max(0, Math.Min(1, value / 100));
+                    }
+                    UpdateContents();
+                }
+            );
+        }
+
+        private static void PickInfiniteFluid()
+        {
+            var owner = factory;
+            int valveEntity = entity;
+            UIItemPickerExtension.Popup(
+                new Vector2(-220, 180),
+                item =>
+                {
+                    if (
+                        owner == factory
+                        && valveEntity == entity
+                        && item != null
+                        && item.IsFluid
+                        && TransportItemRegistry.IsAllowed(item.ID)
+                    )
+                    {
+                        Settings().InfiniteItemId = item.ID;
+                        UpdateContents();
+                    }
+                },
+                true,
+                item => item.IsFluid && TransportItemRegistry.IsAllowed(item.ID)
             );
         }
 
@@ -285,10 +334,10 @@ namespace FluidPipes
 
             if (game.splitterWindow.active)
             {
-                int entityId2 = game.splitterWindow.splitterId;
-                if (entityId2 > 0 && entityId2 < current.cargoTraffic.splitterPool.Length)
+                int splitterId = game.splitterWindow.splitterId;
+                if (splitterId > 0 && splitterId < current.cargoTraffic.splitterPool.Length)
                 {
-                    int targetEntityId = current.cargoTraffic.splitterPool[entityId2].entityId;
+                    int targetEntityId = current.cargoTraffic.splitterPool[splitterId].entityId;
                     if (PipeValves.IsValve(current, targetEntityId))
                     {
                         selected = targetEntityId;
@@ -307,16 +356,21 @@ namespace FluidPipes
                 Create();
             }
 
-            panel.SetActive(true);
-            panel.transform.SetAsLastSibling();
             if (entity != selected || factory != current || valve != isValve)
             {
+                inventoryWindow._Close();
                 entity = selected;
                 factory = current;
                 valve = isValve;
-                page = 0;
                 emptyUntil = 0;
                 refresh = 0;
+                ConfigureInventory();
+            }
+            panel.SetActive(true);
+            panel.transform.SetAsLastSibling();
+            if (!valve && PipeRuntime.HasInventory(factory, entity))
+            {
+                inventoryWindow._Update();
             }
             pipeControls.SetActive(!valve);
             valveControls.SetActive(valve);
@@ -325,6 +379,63 @@ namespace FluidPipes
                 UpdateContents();
                 refresh = Time.unscaledTime + 0.2f;
             }
+            if (!valve)
+            {
+                PipeSelectionHighlights.Show(factory, entity, peers);
+            }
+            else
+            {
+                PipeSelectionHighlights.Hide();
+            }
+        }
+
+        private static void ConfigureInventory()
+        {
+            if (inventoryWindow.data != GameMain.data)
+            {
+                inventoryWindow._Free();
+                inventoryWindow._Init(GameMain.data);
+            }
+            NativeTankInventoryBridge.PipeFactory = factory;
+            NativeTankInventoryBridge.PipeEntityId = valve ? 0 : entity;
+            if (valve || !PipeRuntime.HasInventory(factory, entity))
+            {
+                NativePipeUi.HideInventory(inventoryWindow);
+                summary.SetActive(false);
+                inventory.gameObject.SetActive(true);
+                NativePipeUi.Layout((RectTransform)inventory.transform, 58, 84);
+                NativePipeUi.Layout((RectTransform)status.transform, 144, 44);
+                return;
+            }
+            inventory.gameObject.SetActive(false);
+            summary.SetActive(true);
+
+            foreach (
+                var component in new Component[]
+                {
+                    inventoryWindow.countLabel,
+                    inventoryWindow.countText,
+                    inventoryWindow.circle0,
+                    inventoryWindow.circle1,
+                    inventoryWindow.circle2,
+                    inventoryWindow.circle3,
+                    inventoryWindow.productIcon,
+                    inventoryWindow.productIncArrow,
+                    inventoryWindow.productTipButton,
+                    inventoryWindow.actionImage0,
+                    inventoryWindow.actionText,
+                    inventoryWindow.menuButton,
+                }
+            )
+            {
+                component.gameObject.SetActive(true);
+            }
+            inventoryWindow.transform.Find("produce").gameObject.SetActive(true);
+            inventoryWindow.inputButton.gameObject.SetActive(false);
+            inventoryWindow.outputButton.gameObject.SetActive(false);
+            inventoryWindow._Open();
+            UIRoot.instance.uiGame.OpenPlayerInventory();
+            NativePipeUi.Layout((RectTransform)status.transform, 374, 28);
         }
 
         private static void MaskWindow(GameObject window)
@@ -354,6 +465,10 @@ namespace FluidPipes
 
         private static void Hide()
         {
+            PipeSelectionHighlights.Hide();
+            NativePipeUi.HideWorldLabels("FluidPipes.Pipe");
+            PipeMachinePortPanel.Hide();
+            inventoryWindow?._Close();
             if (panel != null)
             {
                 panel.SetActive(false);
@@ -393,10 +508,16 @@ namespace FluidPipes
             {
                 return;
             }
+            machinePortButton.SetActive(
+                !valve
+                    && PipeRuntime.HasInventory(factory, entity)
+                    && PipeMachinePorts.Connections(factory, entity).Length > 0
+            );
 
             var graph = PipeRuntime.Bind(factory.cargoTraffic);
             if (valve)
             {
+                panel.GetComponent<RectTransform>().sizeDelta = new Vector2(306, 532);
                 title.text = "流体阀门";
                 PipeValves.Ends(factory, entity, out int firstEntityId, out int secondEntityId);
                 inventory.text =
@@ -406,7 +527,7 @@ namespace FluidPipes
                             ? "未连接"
                             : Describe(PipePools.View(graph, firstEntityId, true))
                     )
-                    + "\n\nB 侧："
+                    + "\nB 侧："
                     + (
                         secondEntityId == 0
                             ? "未连接"
@@ -424,6 +545,43 @@ namespace FluidPipes
                     + "%\n"
                     + status.text;
                 var valveSettings = Settings();
+                bool sandbox = SandboxValve.Available;
+                valveModeLabel.transform.parent.gameObject.SetActive(sandbox);
+                valveModeLabel.text = valveSettings.InfiniteEnabled
+                    ? "沙盒模式：永续管"
+                    : "工作模式：普通阀门";
+                bool infinite = sandbox && valveSettings.InfiniteEnabled;
+                regularValveControls.SetActive(!infinite);
+                infiniteValveControls.SetActive(infinite);
+                NativePipeUi.Layout(
+                    (RectTransform)regularValveControls.transform,
+                    sandbox ? 78 : 42,
+                    210,
+                    0
+                );
+                if (infinite)
+                {
+                    status.text = "沙盒永续管 · 直接调节所选空间液位";
+                    infiniteSideLabel.text =
+                        "控制接口：" + (valveSettings.InfiniteSide == 0 ? "A 侧" : "B 侧");
+                    infiniteItemLabel.text = "液体：" + Fluid(valveSettings.InfiniteItemId);
+                    infiniteModeLabel.text =
+                        "液位模式："
+                        + (
+                            valveSettings.InfiniteMode == InfiniteLevelMode.AtLeast ? "至少 ≥"
+                            : valveSettings.InfiniteMode == InfiniteLevelMode.AtMost ? "至多 ≤"
+                            : "恰好 ="
+                        );
+                    if (!infiniteTarget.isFocused)
+                    {
+                        infiniteTarget.SetTextWithoutNotify(
+                            (valveSettings.InfiniteTarget * 100).ToString(
+                                "0.###",
+                                CultureInfo.InvariantCulture
+                            )
+                        );
+                    }
+                }
                 enabledLabel.text = valveSettings.Enabled ? "阀门：开启" : "阀门：关闭";
                 direction.text =
                     "方向："
@@ -456,114 +614,98 @@ namespace FluidPipes
                 editing = false;
                 return;
             }
-            title.text = "流体管道";
+            title.text = LDB.items.Select(factory.entityPool[entity].protoId).name;
             var view = PipePools.View(graph, entity, true);
-            inventory.text =
-                "流体："
-                + Fluid(view.Item)
-                + "\n当前管段：约 "
-                + (view.Fill * PipeGraph.SegmentCapacity).ToString("F2")
-                + " / 100\n管道内总量："
-                + view.PipeCount
+            bool storesItems = PipeRuntime.HasInventory(factory, entity);
+            if (!storesItems)
+            {
+                inventory.text =
+                    "连通节点：" + view.Nodes + "\n当前连接：" + graph.Links(entity).Length;
+                status.text = PipeTypeRegistry.IsUndirected(factory.entityPool[entity].protoId)
+                    ? "无向连接"
+                    : "有向连接";
+            }
+            pipeValues[0].text =
+                (view.Fill * PipeGraph.SegmentCapacity).ToString("0.##")
                 + " / "
-                + view.PipeCapacity
-                + "\n连通总量："
-                + view.Count
-                + " / "
-                + view.Capacity
-                + "  ("
-                + (view.Fill * 100).ToString("F2")
-                + "%)\n管段："
-                + view.Nodes
-                + "  外部容器："
-                + view.Containers;
-            status.text = view.Conflict
-                ? "连接的容器存在液体冲突，已暂停均衡。"
-                : "连通容器按容量共享液位。";
+                + PipeGraph.SegmentCapacity;
+            pipeValues[1].text = view.PipeCount + " / " + view.PipeCapacity;
+            pipeValues[2].text = view.Capacity + "  (" + (view.Fill * 100).ToString("0.#") + "%)";
+            pipeValues[3].text = view.Nodes + " / " + view.Containers;
+            if (storesItems)
+            {
+                status.text =
+                    view.Conflict ? "连接的容器存在液体冲突，已暂停均衡。"
+                    : view.Count > view.Capacity ? "存量超出容量，提取后恢复存入。"
+                    : "连通容器按容量共享液位。";
+            }
+
+            emptyLabel.transform.parent.gameObject.SetActive(storesItems);
             emptyLabel.text =
-                Time.unscaledTime < emptyUntil
-                    ? "再次点击确认清空全部连通液体"
-                    : "清空全部连通液体";
-            peers = PipeTopology.Neighbors(factory, entity);
-            int pages = Math.Max(1, (peers.Length + 3) / 4);
-            page %= pages;
-            connections.text = "相邻管道连接  " + (page + 1) + " / " + pages;
-            for (int index2 = 0; index2 < peerButtons.Count; index2++)
+                Time.unscaledTime < emptyUntil ? "确认清空整个液体网" : "清空整个液体网";
+            peers = PipeTypeRegistry.IsUndirected(factory.entityPool[entity].protoId)
+                ? PipeTopology.Neighbors(factory, entity)
+                : graph.Links(entity);
+            connections.text = "相邻连接（" + peers.Length + "）";
+            while (peerButtons.Count < peers.Length)
             {
-                int index = page * 4 + index2;
-                peerButtons[index2].SetActive(index < peers.Length);
-                if (index < peers.Length)
+                int connectionIndex = peerButtons.Count;
+                var label = Button(
+                    pipeControls.transform,
+                    0,
+                    "",
+                    () => Disconnect(connectionIndex)
+                );
+                var button = label.transform.parent.gameObject;
+                button.name = "disconnect-" + (connectionIndex + 1);
+                peerButtons.Add(button);
+            }
+            const int columns = 2;
+            const float buttonHeight = 26;
+            const float rowSpacing = 32;
+            const float columnGap = 8;
+            for (int buttonIndex = 0; buttonIndex < peerButtons.Count; buttonIndex++)
+            {
+                var button = peerButtons[buttonIndex];
+                bool visible = buttonIndex < peers.Length;
+                button.SetActive(visible);
+                if (!visible)
                 {
-                    peerButtons[index2].GetComponentInChildren<Text>().text =
-                        "断开连接 " + (index + 1);
+                    continue;
                 }
+                int column = buttonIndex % columns;
+                float top = 70 + buttonIndex / columns * rowSpacing;
+                var bounds = (RectTransform)button.transform;
+                bounds.anchorMin = new Vector2((float)column / columns, 1);
+                bounds.anchorMax = new Vector2((float)(column + 1) / columns, 1);
+                bounds.pivot = new Vector2(0.5f, 1);
+                bounds.offsetMin = new Vector2(
+                    column == 0 ? 0 : columnGap / 2,
+                    -top - buttonHeight
+                );
+                bounds.offsetMax = new Vector2(column == columns - 1 ? 0 : -columnGap / 2, -top);
+                var label = button.GetComponentInChildren<Text>();
+                label.text = "断开连接 " + (buttonIndex + 1);
+                NativePipeUi.Layout((RectTransform)label.transform, 0, buttonHeight, 10);
             }
-        }
-
-        private static void Deposit()
-        {
-            var player = GameMain.mainPlayer;
-            if (
-                player == null
-                || player.inhandItemCount <= 0
-                || !TransportItemRegistry.IsAllowed(player.inhandItemId)
-            )
+            int rows = (peers.Length + columns - 1) / columns;
+            float controlsBottom = 70 + rows * rowSpacing;
+            if (machinePortButton.activeSelf)
             {
-                return;
+                NativePipeUi.Layout((RectTransform)machinePortButton.transform, controlsBottom, 30);
+                controlsBottom += 38;
             }
-
-            var graph = PipeRuntime.Bind(factory.cargoTraffic);
-            var view = PipePools.View(graph, entity, true);
-            int count = (int)
-                Math.Min(player.inhandItemCount, Math.Max(0, view.Capacity - view.Count));
-            if (count <= 0)
-            {
-                return;
-            }
-
-            int proliferatorPoints = (int)(
-                (long)player.inhandItemInc * count / player.inhandItemCount
+            float controlsTop = storesItems ? 414 : 174;
+            NativePipeUi.Layout(
+                (RectTransform)pipeControls.transform,
+                controlsTop,
+                controlsBottom,
+                32
             );
-            if (PipePools.Insert(graph, entity, player.inhandItemId, count, proliferatorPoints))
-            {
-                player.SetHandItemInc_Unsafe(player.inhandItemInc - proliferatorPoints);
-                player.SetHandItemCount_Unsafe(player.inhandItemCount - count);
-                if (player.inhandItemCount == 0)
-                {
-                    player.SetHandItemId_Unsafe(0);
-                }
-            }
-            UpdateContents();
-        }
-
-        private static void Withdraw()
-        {
-            var player = GameMain.mainPlayer;
-            var graph = PipeRuntime.Bind(factory.cargoTraffic);
-            var inventoryView = PipePools.View(graph, entity, true);
-            if (
-                player == null
-                || inventoryView.Count == 0
-                || player.inhandItemCount > 0 && player.inhandItemId != inventoryView.Item
-            )
-            {
-                return;
-            }
-
-            int room = LDB.items.Select(inventoryView.Item).StackSize - player.inhandItemCount;
-            if (room <= 0)
-            {
-                return;
-            }
-
-            var amount = PipePools.Take(graph, entity, room);
-            if (amount.Count > 0)
-            {
-                player.SetHandItemId_Unsafe(amount.Item);
-                player.SetHandItemCount_Unsafe(player.inhandItemCount + (int)amount.Count);
-                player.SetHandItemInc_Unsafe(player.inhandItemInc + (int)amount.ProliferatorPoints);
-            }
-            UpdateContents();
+            panel.GetComponent<RectTransform>().sizeDelta = new Vector2(
+                306,
+                controlsTop + 32 + controlsBottom
+            );
         }
 
         private static void Empty()
@@ -580,9 +722,8 @@ namespace FluidPipes
             UpdateContents();
         }
 
-        private static void Disconnect(int offset)
+        private static void Disconnect(int index)
         {
-            int index = page * 4 + offset;
             if (index < peers.Length)
             {
                 PipeConnections.Disconnect(factory, entity, peers[index]);
@@ -592,6 +733,7 @@ namespace FluidPipes
 
         public static void DrawLabels()
         {
+            NativePipeUi.HideWorldLabels("FluidPipes.Pipe");
             if (panel == null || !panel.activeSelf || GameCamera.main == null)
             {
                 return;
@@ -599,55 +741,54 @@ namespace FluidPipes
 
             if (valve)
             {
-                var entity2 = factory.entityPool[entity];
-                var ports = LDB.items.Select(entity2.protoId).prefabDesc.portPoses;
+                var valveEntity = factory.entityPool[entity];
+                var ports = LDB.items.Select(valveEntity.protoId).prefabDesc.portPoses;
                 for (int index = 0; index < Math.Min(2, ports.Length); index++)
                 {
                     var point =
-                        entity2.pos
-                        + entity2.rot * ports[index].position
-                        + entity2.pos.normalized * 0.6f;
-                    var screen = GameCamera.main.WorldToScreenPoint(point);
-                    if (screen.z > 0)
-                    {
-                        GUI.Box(
-                            new Rect(screen.x - 14, Screen.height - screen.y - 14, 28, 28),
-                            index == 0 ? "A" : "B"
-                        );
-                    }
+                        valveEntity.pos
+                        + valveEntity.rot * ports[index].position
+                        + valveEntity.pos.normalized * 0.6f;
+                    NativePipeUi.WorldLabel(
+                        "FluidPipes.Pipe",
+                        index,
+                        point,
+                        index == 0 ? "A" : "B"
+                    );
                 }
                 return;
             }
-            for (int index2 = 0; index2 < peers.Length; index2++)
+            for (int connectionIndex = 0; connectionIndex < peers.Length; connectionIndex++)
             {
-                int peer = peers[index2];
+                int peer = peers[connectionIndex];
                 if (!PipeRuntime.IsPipeObject(factory, peer))
                 {
                     continue;
                 }
 
                 var pos = peer > 0 ? factory.entityPool[peer].pos : factory.prebuildPool[-peer].pos;
-                var screen = GameCamera.main.WorldToScreenPoint(
-                    pos + pos.normalized * (PipeMesh.Radius + 0.06f)
+                var dimensions = PipeTypeRegistry.Geometry(
+                    PipeRuntime.ObjectPrototype(factory, peer)
                 );
-                if (screen.z > 0)
-                {
-                    GUI.Box(
-                        new Rect(screen.x - 14, Screen.height - screen.y - 14, 28, 28),
-                        (index2 + 1).ToString()
-                    );
-                }
+                NativePipeUi.WorldLabel(
+                    "FluidPipes.Pipe",
+                    connectionIndex,
+                    pos + pos.normalized * (dimensions.CenterHeight + dimensions.Radius + 0.06f),
+                    (connectionIndex + 1).ToString(),
+                    (RectTransform)panel.transform
+                );
             }
         }
 
         public static void Dispose()
         {
             Hide();
-            if (panel != null)
-            {
-                UnityEngine.Object.Destroy(panel);
-            }
+            PipeSelectionHighlights.Dispose();
+            inventoryWindow?._Destroy();
             panel = null;
+            inventoryWindow = null;
+            NativeTankInventoryBridge.Dispose();
+            NativePipeUi.DisposeWorldLabels();
             entity = 0;
             peerButtons.Clear();
         }

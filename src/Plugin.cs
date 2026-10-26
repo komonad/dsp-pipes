@@ -15,21 +15,27 @@ namespace FluidPipes
     [BepInDependency(CommonAPIPlugin.GUID)]
     [BepInDependency("me.xiaoye97.plugin.Dyson.LDBTool")]
     [BepInDependency(DSPModSavePlugin.MODGUID)]
+    [BepInDependency(
+        Integration.BuildBarIntegration.PluginGuid,
+        BepInDependency.DependencyFlags.SoftDependency
+    )]
     [CommonAPISubmoduleDependency(nameof(ProtoRegistry), nameof(LocalizationModule))]
     public sealed class Plugin : BaseUnityPlugin, IModCanSave
     {
         public const string Guid = API.PipeApi.PluginGuid;
         private Harmony harmony;
         private GameHistoryData unlockedHistory;
+        private bool prototypeInitializationAttempted;
 
         private void Awake()
         {
+            PipeTypeRegistry.Initialize();
             PipeConfiguration.Load(Config, Logger);
             LocalizationModule.RegisterTranslation("FluidPipes.Name", "Fluid Pipe", "流体管道", "");
             LocalizationModule.RegisterTranslation(
                 "FluidPipes.Description",
-                "Connected pipes share a single-item inventory. Capacity: 100 per segment.",
-                "连通管道共享单一物品库存。每段容量100。",
+                "Connected pipes share a single-item inventory. Capacity: 10 per segment.",
+                "连通管道共享单一物品库存。每段容量10。",
                 ""
             );
             LocalizationModule.RegisterTranslation(
@@ -50,6 +56,11 @@ namespace FluidPipes
             harmony.PatchAll();
         }
 
+        private void Start()
+        {
+            Integration.Reservoirs.OrbitalRingCompatibility.Initialize(harmony, Logger);
+        }
+
         private void OnDestroy()
         {
             LDBTool.PreAddDataAction -= Prototypes.Register;
@@ -59,6 +70,7 @@ namespace FluidPipes
             PipeVisuals.Dispose();
             PipeIcon.Dispose();
             PipePanel.Dispose();
+            PipeMachinePortPanel.Dispose();
         }
 
         private void LateUpdate()
@@ -92,14 +104,32 @@ namespace FluidPipes
 
         private void Update()
         {
+            if (!prototypeInitializationAttempted && VFPreload.done)
+            {
+                prototypeInitializationAttempted = true;
+                try
+                {
+                    PipeTypeRegistry.Seal();
+                    TransportItemRegistry.Refresh();
+                    Prototypes.Ready = true;
+                }
+                catch (Exception error)
+                {
+                    Logger.LogError("Pipe type initialization failed: " + error);
+                }
+            }
             if (Prototypes.Ready)
             {
+                API.PipeTypes.FlushChanges();
+                PipeVisuals.FlushColliderChanges();
                 PipePanel.Update();
+                PipeMachinePortPanel.Update();
             }
 
             var history = GameMain.history;
             if (
                 Prototypes.Ready
+                && Prototypes.BuiltInItemsEnabled
                 && GameMain.isRunning
                 && history != null
                 && history != unlockedHistory
@@ -122,6 +152,7 @@ namespace FluidPipes
             if (
                 PipeConfiguration.EnableDebugHotkey
                 && Prototypes.Ready
+                && Prototypes.BuiltInItemsEnabled
                 && GameMain.mainPlayer != null
                 && Input.GetKeyDown(KeyCode.F8)
             )
@@ -134,6 +165,7 @@ namespace FluidPipes
         private void OnGUI()
         {
             PipePanel.DrawLabels();
+            PipeMachinePortPanel.DrawLabels();
         }
 
         public void Export(BinaryWriter writer)

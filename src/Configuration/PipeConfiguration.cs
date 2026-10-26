@@ -8,8 +8,18 @@ namespace FluidPipes
     {
         internal static bool EnableDebugHotkey { get; private set; }
 
+        internal static bool EnableMachinePorts { get; private set; }
+
         internal static void Load(ConfigFile config, ManualLogSource log)
         {
+            EnableMachinePorts = config
+                .Bind(
+                    "Integration",
+                    "EnableMachinePorts",
+                    false,
+                    "Connect pipes directly to production-machine inserter slots. Configure direction and item at each connection. Requires a game restart. Existing connections retain their settings while disabled."
+                )
+                .Value;
             EnableDebugHotkey = config
                 .Bind(
                     "General",

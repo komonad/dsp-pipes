@@ -9,10 +9,28 @@
     <ItemGroup>
         <Compile Include="RuntimeChecks.cs" />
         <Compile Include="ApiChecks.cs" />
+        <Compile Include="PipeTypeChecks.cs" />
+        <Compile Include="PipeTypeAppearanceChecks.cs" />
+        <Compile Include="PipeTypeCollisionChecks.cs" />
+        <Compile Include="PipeTypeJointChecks.cs" />
+        <Compile Include="PipeInteriorChecks.cs" />
+        <Compile Include="PipeOpenBeamChecks.cs" />
+        <Compile Include="CopperPipesChecks.cs" />
+        <Compile Include="CopperIconChecks.cs" />
+        <Compile Include="PipeIconApiChecks.cs" />
+        <Compile Include="PipeAttachmentChecks.cs" />
+        <Compile Include="MachinePortChecks.cs" />
+        <Compile Include="InserterAppearanceChecks.cs" />
+        <Compile Include="FluidAppearanceChecks.cs" />
         <Compile Include="CoreSuite.cs" />
         <Compile Include="PipeGallery.cs" />
         <Compile Include="PipeIconRender.cs" />
         <ProjectReference Include="../FluidPipes.csproj" />
+        <Reference
+            Include="UnityEngine.AudioModule"
+            HintPath="$(Managed)/UnityEngine.AudioModule.dll"
+            Private="false"
+        />
     </ItemGroup>
     <ItemGroup>
         <Reference Include="Assembly-CSharp">
@@ -27,12 +45,20 @@
             <HintPath>$(BepInExCore)/0Harmony.dll</HintPath>
             <Private>false</Private>
         </Reference>
+        <Reference Include="LDBTool">
+            <HintPath>$(BepInExCore)/../plugins/xiaoye97-LDBTool/LDBTool.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
         <Reference Include="UnityEngine">
             <HintPath>$(Managed)/UnityEngine.dll</HintPath>
             <Private>false</Private>
         </Reference>
         <Reference Include="UnityEngine.CoreModule">
             <HintPath>$(Managed)/UnityEngine.CoreModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.PhysicsModule">
+            <HintPath>$(Managed)/UnityEngine.PhysicsModule.dll</HintPath>
             <Private>false</Private>
         </Reference>
         <Reference Include="UnityEngine.ImageConversionModule">

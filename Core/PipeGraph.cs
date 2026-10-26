@@ -32,7 +32,10 @@ namespace FluidPipes
 
     internal sealed class PipeGraph
     {
-        public const int SegmentCapacity = 100;
+        public const int SegmentCapacity = 10;
+
+        // Graph format 1 includes saves written with a capacity of 100 per node.
+        private const int HistoricalSegmentCapacity = 100;
 
         private sealed class Network
         {
@@ -490,6 +493,21 @@ namespace FluidPipes
             }
         }
 
+        public int[] Members(int nodeId)
+        {
+            topology.EnterReadLock();
+            try
+            {
+                return nodes.TryGetValue(nodeId, out var node)
+                    ? node.Net.Members.ToArray()
+                    : new int[0];
+            }
+            finally
+            {
+                topology.ExitReadLock();
+            }
+        }
+
         public int[] Representatives()
         {
             topology.EnterReadLock();
@@ -516,9 +534,11 @@ namespace FluidPipes
                 var network = node.Net;
                 lock (network.Sync)
                 {
+                    // Imported surplus can remain or decrease while nominal capacity controls new stock.
                     if (
                         count < 0
-                        || count > (long)network.Members.Count * SegmentCapacity
+                        || count
+                            > Math.Max((long)network.Members.Count * SegmentCapacity, network.Count)
                         || proliferatorPoints < 0
                         || proliferatorPoints > count * 10
                         || count > 0 && item <= 0
@@ -638,7 +658,9 @@ namespace FluidPipes
                     !graph.nodes.TryGetValue(nodeId2, out var node)
                     || !visited.Add(node.Net)
                     || count < 0
-                    || count > (long)node.Net.Members.Count * SegmentCapacity
+                    || count
+                        > (long)node.Net.Members.Count
+                            * Math.Max(SegmentCapacity, HistoricalSegmentCapacity)
                     || proliferatorPoints < 0
                     || proliferatorPoints > count * 10
                     || (count == 0 ? item != 0 || proliferatorPoints != 0 : item <= 0)

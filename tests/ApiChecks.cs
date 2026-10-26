@@ -20,6 +20,18 @@ public sealed partial class RuntimeChecks
                 && PipeApi.ValveItemId == Prototypes.ValveId,
             "API exposes initialized prototype IDs"
         );
+        ExpectTypeException<InvalidOperationException>(
+            PipeApi.DisableBuiltInItems,
+            "initialized default content remains fixed when a late opt-out call is rejected"
+        );
+        ExpectTypeException<InvalidOperationException>(
+            () =>
+                PipeTypes.SetItemIcon(
+                    LDB.items.Select(PipeApi.PipeItemId),
+                    LDB.items.Select(PipeApi.PipeItemId).iconSprite
+                ),
+            "item icon assignment closes after prototype initialization"
+        );
         Check(
             !PipeApi.IsPipe(null, 1)
                 && !PipeApi.IsPipe(factory, -1)
@@ -39,11 +51,11 @@ public sealed partial class RuntimeChecks
                 && PipeApi.TryGetInventory(factory, 3, out inventory)
                 && inventory.Count == 10
                 && inventory.ProliferatorPoints == 40
-                && inventory.Capacity == 300,
+                && inventory.Capacity == 30,
             "API inventory includes conserved points"
         );
         Check(
-            !PipeApi.TryInsert(factory, 1, 1000, 291)
+            !PipeApi.TryInsert(factory, 1, 1000, 21)
                 && !PipeApi.TryInsert(factory, 1, 1000, 1, 11)
                 && !PipeApi.TryTake(factory, 3, 1, out _, 1007),
             "API rejects overflow, invalid points and mismatched filters"
@@ -110,7 +122,7 @@ public sealed partial class RuntimeChecks
         using (PipeApi.RegisterTransportItems(1101))
         {
             Check(
-                PipeApi.TryInsert(factory, 1, 1101, 298, 1192),
+                PipeApi.TryInsert(factory, 1, 1101, 28, 112),
                 "configured solid fills a pure pipe space"
             );
             int remainingItems = 5;
@@ -127,8 +139,8 @@ public sealed partial class RuntimeChecks
                 remainingItems == 3
                     && remainingPoints == 12
                     && PipeApi.TryTake(factory, 3, 300, out amount)
-                    && amount.Count == 300
-                    && amount.ProliferatorPoints == 1200,
+                    && amount.Count == 30
+                    && amount.ProliferatorPoints == 120,
                 "native partial insertion preserves unaccepted solid items and points"
             );
             var station = new StationComponent
@@ -152,7 +164,7 @@ public sealed partial class RuntimeChecks
             Check(
                 PipeApi.TryGetNetwork(factory, 3, out var snapshot)
                     && snapshot.Inventory.Count == 500
-                    && snapshot.Inventory.Capacity == 1300
+                    && snapshot.Inventory.Capacity == 1030
                     && snapshot.PipeNodeCount == 3
                     && snapshot.ContainerCount == 1
                     && station.storage[0].count > 0,
@@ -274,7 +286,9 @@ public sealed partial class RuntimeChecks
                     member is MethodInfo accessor && accessor.IsSpecialName
                     || member is FieldInfo specialField && specialField.IsSpecialName
                 )
+                {
                     continue;
+                }
                 if (member is MethodBase method)
                 {
                     var parameters = method.GetParameters();
@@ -285,7 +299,7 @@ public sealed partial class RuntimeChecks
                                 + string.Join(
                                     ",",
                                     parameters.Select(parameter =>
-                                        parameter.ParameterType.FullName.Replace("&", "@")
+                                        DocumentationTypeName(parameter.ParameterType)
                                     )
                                 )
                                 + ")";
@@ -298,19 +312,26 @@ public sealed partial class RuntimeChecks
                             + signature
                     );
                     foreach (var parameter in parameters)
+                    {
                         if (entry.SelectSingleNode("param[@name='" + parameter.Name + "']") == null)
+                        {
                             throw new Exception(
                                 "Missing parameter documentation: "
                                     + member.Name
                                     + "."
                                     + parameter.Name
                             );
+                        }
+                    }
                 }
-                else if (member is PropertyInfo || member is FieldInfo)
-                    RequireDocumentation(
-                        document,
-                        (member is PropertyInfo ? "P:" : "F:") + type.FullName + "." + member.Name
-                    );
+                else if (member is PropertyInfo || member is FieldInfo || member is EventInfo)
+                {
+                    string prefix =
+                        member is PropertyInfo ? "P:"
+                        : member is EventInfo ? "E:"
+                        : "F:";
+                    RequireDocumentation(document, prefix + type.FullName + "." + member.Name);
+                }
             }
         }
         Check(
@@ -319,11 +340,53 @@ public sealed partial class RuntimeChecks
         );
     }
 
+    private static string DocumentationTypeName(Type type)
+    {
+        if (type.IsByRef)
+        {
+            return DocumentationTypeName(type.GetElementType()) + "@";
+        }
+
+        if (type.IsPointer)
+        {
+            return DocumentationTypeName(type.GetElementType()) + "*";
+        }
+
+        if (type.IsArray)
+        {
+            string dimensions =
+                type.GetArrayRank() == 1
+                    ? ""
+                    : string.Join(",", Enumerable.Repeat("0:", type.GetArrayRank()));
+            return DocumentationTypeName(type.GetElementType()) + "[" + dimensions + "]";
+        }
+
+        if (type.IsGenericParameter)
+        {
+            string prefix = type.DeclaringMethod == null ? "`" : "``";
+            return prefix + type.GenericParameterPosition;
+        }
+
+        if (type.IsGenericType)
+        {
+            string genericName = type.GetGenericTypeDefinition().FullName;
+            int arityStart = genericName.IndexOf('`');
+            return genericName.Substring(0, arityStart).Replace('+', '.')
+                + "{"
+                + string.Join(",", type.GetGenericArguments().Select(DocumentationTypeName))
+                + "}";
+        }
+
+        return type.FullName.Replace('+', '.');
+    }
+
     private static XmlNode RequireDocumentation(XmlDocument document, string memberId)
     {
         var node = document.SelectSingleNode("/doc/members/member[@name='" + memberId + "']");
         if (string.IsNullOrWhiteSpace(node?.SelectSingleNode("summary")?.InnerText))
+        {
             throw new Exception("Missing API documentation: " + memberId);
+        }
         return node;
     }
 }

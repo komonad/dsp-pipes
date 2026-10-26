@@ -23,10 +23,12 @@ namespace FluidPipes
         public static void Clear()
         {
             graphs.Clear();
+            API.PipeTypes.ClearChanges();
             owners = new ConditionalWeakTable<CargoContainer, Owner>();
             PipeTopology.Clear();
             PipePools.Clear();
             PipeValves.Clear();
+            PipeMachinePorts.Clear();
         }
 
         public static PipeGraph Bind(CargoTraffic traffic)
@@ -58,8 +60,9 @@ namespace FluidPipes
                 && belt > 0
                 && belt < traffic.beltPool.Length
                 && traffic.beltPool[belt].id == belt
-                && traffic.factory.entityPool[traffic.beltPool[belt].entityId].protoId
-                    == Prototypes.ItemId;
+                && PipeTypeRegistry.IsItem(
+                    traffic.factory.entityPool[traffic.beltPool[belt].entityId].protoId
+                );
         }
 
         public static bool TryBelt(
@@ -116,11 +119,39 @@ namespace FluidPipes
             graph.Add(entity);
             var segment = traffic.beltPool[belt];
             var desired = new HashSet<int>();
-            if (UsesObjectLinks(traffic, entity))
+            if (!PipeTypeRegistry.IsUndirected(traffic.factory.entityPool[entity].protoId))
+            {
+                for (int slot = 0; slot < 4; slot++)
+                {
+                    if (
+                        PipeConnections.TryReadNativeLink(
+                            traffic.factory,
+                            entity,
+                            slot,
+                            out _,
+                            out int peer
+                        )
+                        && peer > 0
+                        && IsPipe(traffic, traffic.factory.entityPool[peer].beltId)
+                    )
+                    {
+                        desired.Add(peer);
+                    }
+                }
+            }
+            else if (UsesObjectLinks(traffic, entity))
             {
                 foreach (int other in PipeTopology.Neighbors(traffic.factory, entity))
                 {
-                    if (other > 0 && IsPipeObject(traffic.factory, other))
+                    if (
+                        other > 0
+                        && IsPipeObject(traffic.factory, other)
+                        && IsPipe(traffic, traffic.factory.entityPool[other].beltId)
+                        && PipeTypeRegistry.Compatible(
+                            traffic.factory.entityPool[entity].protoId,
+                            traffic.factory.entityPool[other].protoId
+                        )
+                    )
                     {
                         desired.Add(other);
                     }
@@ -138,7 +169,13 @@ namespace FluidPipes
                     }
                 )
                 {
-                    if (IsPipe(traffic, other))
+                    if (
+                        IsPipe(traffic, other)
+                        && PipeTypeRegistry.Compatible(
+                            traffic.factory.entityPool[entity].protoId,
+                            traffic.factory.entityPool[traffic.beltPool[other].entityId].protoId
+                        )
+                    )
                     {
                         desired.Add(traffic.beltPool[other].entityId);
                     }
@@ -168,68 +205,94 @@ namespace FluidPipes
             }
 
             int firstPrototypeId = Proto(factory, firstEntityId);
-
             int secondPrototypeId = Proto(factory, secondEntityId);
-            bool pipeA = firstPrototypeId == Prototypes.ItemId;
-            bool pipeB = secondPrototypeId == Prototypes.ItemId;
-            if (firstPrototypeId == Prototypes.ValveId || secondPrototypeId == Prototypes.ValveId)
+            if (!CanLinkPrototypes(firstPrototypeId, secondPrototypeId))
             {
-                return pipeA || pipeB;
+                return false;
             }
 
-            if (!pipeA && !pipeB)
-            {
-                return true;
-            }
-
-            if (pipeA && pipeB)
-            {
-                return firstEntityId <= 0
-                    || secondEntityId <= 0
-                    || Bind(factory.cargoTraffic).CanConnect(firstEntityId, secondEntityId)
-                        && PipePools.CanConnect(
-                            Bind(factory.cargoTraffic),
-                            firstEntityId,
-                            secondEntityId
-                        );
-            }
-
-            int proto = pipeA ? secondPrototypeId : firstPrototypeId;
-            if (proto == Prototypes.ValveId)
-            {
-                return true;
-            }
-
-            var desc = LDB.items.Select(proto)?.prefabDesc;
             if (
-                desc == null
-                || desc.isBelt
-                || desc.isSplitter
-                || desc.isPiler
-                || desc.isSpraycoster
-                || desc.isMonitor
+                firstEntityId > 0
+                && secondEntityId > 0
+                && PipeTypeRegistry.IsInventory(firstPrototypeId)
+                && PipeTypeRegistry.IsInventory(secondPrototypeId)
+            )
+            {
+                var graph = Bind(factory.cargoTraffic);
+                return graph.CanConnect(firstEntityId, secondEntityId)
+                    && PipePools.CanConnect(graph, firstEntityId, secondEntityId);
+            }
+            return true;
+        }
+
+        internal static bool CanLinkPrototypes(int firstPrototypeId, int secondPrototypeId)
+        {
+            bool firstIsPipe = PipeTypeRegistry.IsItem(firstPrototypeId);
+            bool secondIsPipe = PipeTypeRegistry.IsItem(secondPrototypeId);
+            if (
+                Prototypes.ValveId > 0
+                && (
+                    firstPrototypeId == Prototypes.ValveId
+                    || secondPrototypeId == Prototypes.ValveId
+                )
+            )
+            {
+                return firstIsPipe && PipeTypeRegistry.IsInventory(firstPrototypeId)
+                    || secondIsPipe && PipeTypeRegistry.IsInventory(secondPrototypeId);
+            }
+
+            if (!firstIsPipe && !secondIsPipe)
+            {
+                return true;
+            }
+
+            if (firstIsPipe && secondIsPipe)
+            {
+                return PipeTypeRegistry.Compatible(firstPrototypeId, secondPrototypeId);
+            }
+
+            if (!PipeTypeRegistry.IsInventory(firstIsPipe ? firstPrototypeId : secondPrototypeId))
+            {
+                return false;
+            }
+
+            int machinePrototypeId = firstIsPipe ? secondPrototypeId : firstPrototypeId;
+            var descriptor = LDB.items.Select(machinePrototypeId)?.prefabDesc;
+            if (
+                descriptor == null
+                || descriptor.isBelt
+                || descriptor.isSplitter
+                || descriptor.isPiler
+                || descriptor.isSpraycoster
+                || descriptor.isMonitor
             )
             {
                 return false;
             }
 
-            if (desc.isInserter)
-            {
-                return true;
-            }
-
-            return desc.isTank
-                || desc.isStation
-                || desc.minerType != EMinerType.None
-                || desc.isFractionator;
+            return descriptor.isInserter
+                || descriptor.isTank
+                || PipeMachinePorts.Enabled
+                    && descriptor.isAssembler
+                    && descriptor.slotPoses?.Length > 0
+                || descriptor.isStation
+                || descriptor.minerType != EMinerType.None
+                || descriptor.isFractionator;
         }
 
+        internal static bool HasInventory(PlanetFactory factory, int entityId) =>
+            PipeTypeRegistry.IsInventory(Proto(factory, entityId));
+
         public static bool IsPipeObject(PlanetFactory factory, int entityId) =>
-            Proto(factory, entityId) == Prototypes.ItemId;
+            PipeTypeRegistry.IsItem(Proto(factory, entityId));
 
         public static void UseObjectLinks(CargoTraffic traffic, int entity)
         {
             Bind(traffic);
+            if (!PipeTypeRegistry.IsUndirected(traffic.factory.entityPool[entity].protoId))
+            {
+                return;
+            }
             if (!PipeTopology.Contains(traffic.factory, entity))
             {
                 PipeTopology.Register(traffic.factory, entity);
@@ -242,7 +305,13 @@ namespace FluidPipes
                         out int other,
                         out int otherSlot
                     );
-                    if (!IsPipeObject(traffic.factory, other))
+                    if (
+                        !IsPipeObject(traffic.factory, other)
+                        || !PipeTypeRegistry.Compatible(
+                            traffic.factory.entityPool[entity].protoId,
+                            Proto(traffic.factory, other)
+                        )
+                    )
                     {
                         continue;
                     }
@@ -263,12 +332,22 @@ namespace FluidPipes
         }
 
         public static bool UsesObjectLinks(CargoTraffic traffic, int entity) =>
-            PipeTopology.Contains(traffic.factory, entity);
+            PipeTypeRegistry.IsUndirected(Proto(traffic.factory, entity))
+            && PipeTopology.Contains(traffic.factory, entity);
+
+        internal static int ObjectPrototype(PlanetFactory factory, int entityId) =>
+            Proto(factory, entityId);
 
         private static int Proto(PlanetFactory factory, int entityId)
         {
+            if (factory == null)
+            {
+                return 0;
+            }
+
             if (
                 entityId > 0
+                && factory.entityPool != null
                 && entityId < factory.entityPool.Length
                 && factory.entityPool[entityId].id == entityId
             )
@@ -278,6 +357,7 @@ namespace FluidPipes
 
             if (
                 entityId < 0
+                && factory.prebuildPool != null
                 && -entityId < factory.prebuildPool.Length
                 && factory.prebuildPool[-entityId].id == -entityId
             )
@@ -306,7 +386,7 @@ namespace FluidPipes
 
         public static void Export(BinaryWriter writer)
         {
-            writer.Write(4);
+            writer.Write(6);
             var entries = graphs.OrderBy(x => x.Key).ToArray();
             writer.Write(entries.Length);
             foreach (var entry in entries)
@@ -316,12 +396,13 @@ namespace FluidPipes
             }
             PipeTopology.Export(writer);
             PipeValves.Export(writer);
+            PipeMachinePorts.Export(writer);
         }
 
         public static void Import(BinaryReader reader)
         {
             int version = reader.ReadInt32();
-            if (version < 1 || version > 4)
+            if (version < 1 || version > 6)
             {
                 throw new InvalidDataException("Unsupported fluid pipe save.");
             }
@@ -352,11 +433,20 @@ namespace FluidPipes
 
             if (version >= 4)
             {
-                PipeValves.Import(reader);
+                PipeValves.Import(reader, version >= 6);
             }
             else
             {
                 PipeValves.Clear();
+            }
+
+            if (version >= 5)
+            {
+                PipeMachinePorts.Import(reader);
+            }
+            else
+            {
+                PipeMachinePorts.Clear();
             }
 
             PipePools.Clear();
@@ -372,11 +462,15 @@ namespace FluidPipes
                         Bind(traffic);
                         PipeConnections.RepairImported(factory, version == 2);
                         ValvePower.Restore(factory);
+                        PipeMachinePorts.Restore(factory);
                         for (int index2 = 1; index2 < traffic.beltCursor; index2++)
                         {
                             if (IsPipe(traffic, index2))
                             {
-                                UseObjectLinks(traffic, traffic.beltPool[index2].entityId);
+                                int entityId = traffic.beltPool[index2].entityId;
+                                UseObjectLinks(traffic, entityId);
+                                Sync(traffic, index2);
+                                API.PipeTypes.Changed(factory, entityId);
                             }
                         }
                     }

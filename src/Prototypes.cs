@@ -17,7 +17,34 @@ namespace FluidPipes
         public static int UnlockRecipeId;
         public static int UnlockTechId;
         public static bool Ready;
+        internal static bool BuiltInItemsEnabled { get; private set; } = true;
+        private static bool registrationStarted;
         private static PrefabDesc valveDesc;
+
+        internal static void DisableBuiltInItems()
+        {
+            if (!PipeTypeRegistry.IsMainThread)
+            {
+                throw new InvalidOperationException(
+                    "Built-in content configuration requires the Unity main thread."
+                );
+            }
+            if (registrationStarted)
+            {
+                throw new InvalidOperationException(
+                    "Built-in content configuration closes when prototype registration begins."
+                );
+            }
+
+            BuiltInItemsEnabled = false;
+            ItemId = 0;
+            RecipeId = 0;
+            ValveId = 0;
+            ValveRecipeId = 0;
+            ValveModelId = 0;
+            UnlockRecipeId = 0;
+            UnlockTechId = 0;
+        }
 
         private static T Copy<T>(T value) =>
             (T)AccessTools.Method(typeof(object), "MemberwiseClone").Invoke(value, null);
@@ -49,6 +76,13 @@ namespace FluidPipes
 
         internal static void Register()
         {
+            registrationStarted = true;
+            InitializeTemplate();
+            if (!BuiltInItemsEnabled)
+            {
+                return;
+            }
+
             var usedItems = new HashSet<int>(
                 LDB.items.dataArray.Concat(Queued<ItemProto>())
                     .Select(itemPrototype => itemPrototype.ID)
@@ -72,17 +106,11 @@ namespace FluidPipes
                 throw new InvalidOperationException("No free pipe prototype IDs.");
             }
 
-            var source = LDB.items.Select(2001);
-            var item = Copy(source);
-            item.ID = ItemId;
-            item.Name = "FluidPipes.Name";
-            item.Description = "FluidPipes.Description";
-            item.SID = item.sid = "";
-            item.Grade = 1;
-            item.Upgrades = new int[0];
-            item.IconPath = "";
-            PipeIcon.Assign(item);
-            item.BuildIndex = 0;
+            var item = PipeTypeRegistry.CreateItem(
+                ItemId,
+                "FluidPipes.Name",
+                "FluidPipes.Description"
+            );
             var used = new HashSet<int>(
                 LDB.items.dataArray.Concat(Queued<ItemProto>())
                     .Select(itemPrototype2 => itemPrototype2.GridIndex)
@@ -95,12 +123,29 @@ namespace FluidPipes
                 .Range(1, 7)
                 .SelectMany(r => Enumerable.Range(1, 14).Select(c => 2000 + r * 100 + c))
                 .First(x => !used.Contains(x));
-            item.handcrafts = item.recipes = item.makes = null;
-            item.rawMats = null;
             LDBTool.PreAddProto(item);
             ItemId = item.ID;
+            PipeTypeRegistry.Default(item);
             LDBTool.PreAddProto(BeltRecipe(item, RecipeId));
             RegisterValve();
+        }
+
+        private static void InitializeTemplate()
+        {
+            var item = Copy(LDB.items.Select(2001));
+            item.ID = 0;
+            item.Name = "FluidPipes.Name";
+            item.Description = "FluidPipes.Description";
+            item.SID = item.sid = "";
+            item.Grade = 1;
+            item.Upgrades = new int[0];
+            item.IconPath = "";
+            PipeIcon.Assign(item);
+            item.GridIndex = 0;
+            item.BuildIndex = 0;
+            item.handcrafts = item.recipes = item.makes = null;
+            item.rawMats = null;
+            PipeTypeRegistry.InitializeTemplate(item);
         }
 
         private static void RegisterValve()
@@ -150,6 +195,7 @@ namespace FluidPipes
             }
 
             valveDesc = model.prefabDesc;
+            ValveMesh.Configure(valveDesc);
             LDBTool.PreAddProto(model);
             ValveModelId = model.ID;
             valveDesc.modelIndex = ValveModelId;
@@ -207,6 +253,10 @@ namespace FluidPipes
 
         private static void PlaceBuildBar(params ItemProto[] items)
         {
+            if (Integration.BuildBarIntegration.TryPlaceUpperTransportRow(items))
+            {
+                return;
+            }
             var own = new HashSet<int>(items.Select(itemPrototype => itemPrototype.ID));
             var occupied = new HashSet<int>(
                 LDB.items.dataArray.Where(itemPrototype2 =>
@@ -289,6 +339,11 @@ namespace FluidPipes
 
         internal static void Finish()
         {
+            if (!BuiltInItemsEnabled)
+            {
+                return;
+            }
+
             int length = Math.Max(
                 LDB.models.modelArray?.Length ?? 0,
                 LDB.models.dataArray.Max(modelPrototype => modelPrototype.ID) + 1
@@ -343,7 +398,6 @@ namespace FluidPipes
             }
             PlaceBuildBar(item, LDB.items.Select(ValveId));
             TransportItemRegistry.Refresh();
-            Ready = true;
         }
     }
 }

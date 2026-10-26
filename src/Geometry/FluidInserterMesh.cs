@@ -8,12 +8,15 @@ namespace FluidPipes
     {
         public const float TubeRadius = 0.105f;
         public const float Clearance = 0.28f;
+        internal const int MaterialCount = 6;
+        internal const int ArrowMaterialIndex = 5;
 
         public struct Socket
         {
             public bool Clamp;
             public bool Machine;
             public bool Belt;
+            public float PipeRadius;
             public Vector3 Position;
             public Vector3 Center;
             public Vector3 Axis;
@@ -38,6 +41,8 @@ namespace FluidPipes
             private readonly List<Vector2> uv = new List<Vector2>();
             private readonly List<int>[] triangles =
             {
+                new List<int>(),
+                new List<int>(),
                 new List<int>(),
                 new List<int>(),
                 new List<int>(),
@@ -67,7 +72,9 @@ namespace FluidPipes
                 Vector3 up,
                 float radius,
                 int material,
-                bool inside = false
+                bool inside = false,
+                Vector3? startDirection = null,
+                Vector3? endDirection = null
             )
             {
                 int first = vertices.Count;
@@ -77,6 +84,14 @@ namespace FluidPipes
                     var tangent = (
                         points[Math.Min(row + 1, points.Count - 1)] - points[Math.Max(0, row - 1)]
                     ).normalized;
+                    if (row == 0 && startDirection.HasValue)
+                    {
+                        tangent = startDirection.Value.normalized;
+                    }
+                    else if (row == points.Count - 1 && endDirection.HasValue)
+                    {
+                        tangent = endDirection.Value.normalized;
+                    }
                     if (tangent.sqrMagnitude < 0.001f)
                     {
                         tangent = Vector3.forward;
@@ -210,11 +225,11 @@ namespace FluidPipes
                     normals.Add(up);
                     uv.Add(Vector2.zero);
                 }
-                Triangle(3, first, first + 1, first + 2);
-                Triangle(3, first, first + 2, first + 5);
-                Triangle(3, first, first + 5, first + 6);
-                Triangle(3, first + 2, first + 3, first + 4);
-                Triangle(3, first + 2, first + 4, first + 5);
+                Triangle(ArrowMaterialIndex, first, first + 1, first + 2);
+                Triangle(ArrowMaterialIndex, first, first + 2, first + 5);
+                Triangle(ArrowMaterialIndex, first, first + 5, first + 6);
+                Triangle(ArrowMaterialIndex, first + 2, first + 3, first + 4);
+                Triangle(ArrowMaterialIndex, first + 2, first + 4, first + 5);
             }
 
             public void Saddle(Socket socket)
@@ -224,31 +239,32 @@ namespace FluidPipes
                     return;
                 }
 
+                float pipeRadius = socket.PipeRadius > 0 ? socket.PipeRadius : PipeMesh.Radius;
                 Ring(
                     socket.Center,
                     socket.Axis,
                     socket.Normal,
-                    0.17f,
-                    PipeMesh.Radius + 0.04f,
-                    PipeMesh.Radius + 0.006f,
+                    0.29f,
+                    pipeRadius + 0.04f,
+                    pipeRadius + 0.006f,
                     0
                 );
                 Ring(
                     socket.Center,
                     socket.Axis,
                     socket.Normal,
-                    0.04f,
-                    PipeMesh.Radius + 0.043f,
-                    PipeMesh.Radius + 0.04f,
+                    0.065f,
+                    pipeRadius + 0.043f,
+                    pipeRadius + 0.04f,
                     2
                 );
-                float length = Vector3.Distance(socket.Center, socket.Position) - PipeMesh.Radius;
+                float length = Vector3.Distance(socket.Center, socket.Position) - pipeRadius;
                 Ring(
-                    socket.Center + socket.Normal * (PipeMesh.Radius + length / 2),
+                    socket.Center + socket.Normal * (pipeRadius + length / 2),
                     socket.Normal,
                     socket.Axis,
                     length,
-                    0.135f,
+                    0.165f,
                     TubeRadius * 0.87f,
                     0
                 );
@@ -269,8 +285,83 @@ namespace FluidPipes
                     Bend(center + normal * 0.10f, center + normal * 0.40f, socket.Position),
                     up,
                     TubeRadius,
-                    0
+                    0,
+                    startDirection: normal,
+                    endDirection: up
                 );
+            }
+
+            public void Support(Socket socket, Vector3 trunk, Vector3 forward, Vector3 up)
+            {
+                if (!socket.Machine && !socket.Belt)
+                {
+                    return;
+                }
+
+                var side = Vector3.Cross(forward, up).normalized;
+                Vector3 root = SupportRoot(socket);
+                // The two struts overlap the native frame and the outside of the trunk collar.
+                foreach (float sign in new[] { -1f, 1f })
+                {
+                    Beam(
+                        root + side * (sign * 0.145f),
+                        trunk + side * (sign * 0.145f),
+                        up,
+                        0.075f,
+                        0.075f
+                    );
+                }
+                Ring(trunk, forward, up, 0.12f, 0.16f, TubeRadius + 0.005f, 4);
+            }
+
+            private void Beam(Vector3 start, Vector3 end, Vector3 up, float width, float height)
+            {
+                var axis = (end - start).normalized;
+                var side = Vector3.Cross(axis, up).normalized;
+                if (side.sqrMagnitude < 0.001f)
+                {
+                    side = Vector3.Cross(axis, Vector3.right).normalized;
+                }
+                var vertical = Vector3.Cross(side, axis).normalized;
+                var corners = new Vector3[8];
+                for (int endpoint = 0; endpoint < 2; endpoint++)
+                {
+                    Vector3 center = endpoint == 0 ? start : end;
+                    for (int corner = 0; corner < 4; corner++)
+                    {
+                        float horizontalSign = corner == 0 || corner == 3 ? -1 : 1;
+                        float verticalSign = corner < 2 ? -1 : 1;
+                        corners[endpoint * 4 + corner] =
+                            center
+                            + side * (horizontalSign * width / 2)
+                            + vertical * (verticalSign * height / 2);
+                    }
+                }
+                for (int face = 0; face < 4; face++)
+                {
+                    Quad(
+                        corners[face],
+                        corners[(face + 1) % 4],
+                        corners[4 + (face + 1) % 4],
+                        corners[4 + face]
+                    );
+                }
+                Quad(corners[3], corners[2], corners[1], corners[0]);
+                Quad(corners[4], corners[5], corners[6], corners[7]);
+            }
+
+            private void Quad(Vector3 first, Vector3 second, Vector3 third, Vector3 fourth)
+            {
+                int start = vertices.Count;
+                var normal = Vector3.Cross(second - first, third - first).normalized;
+                vertices.AddRange(new[] { first, second, third, fourth });
+                for (int index = 0; index < 4; index++)
+                {
+                    normals.Add(normal);
+                    uv.Add(Vector2.zero);
+                }
+                Triangle(4, start, start + 1, start + 2);
+                Triangle(4, start, start + 2, start + 3);
             }
 
             public Mesh Build()
@@ -289,6 +380,9 @@ namespace FluidPipes
                 return mesh;
             }
         }
+
+        internal static Vector3 SupportRoot(Socket socket) =>
+            socket.Anchor + socket.Axis * 0.96f + socket.Normal * (socket.Machine ? 0.80f : 0.27f);
 
         private static Vector3[] Bend(Vector3 a, Vector3 control, Vector3 b)
         {
@@ -328,8 +422,22 @@ namespace FluidPipes
             builder.Machine(source, up);
             builder.Machine(destination, up);
             builder.Tube(new[] { start, a - up * bend }, forward, TubeRadius, 0);
-            builder.Tube(Bend(a - up * bend, a, a + forward * bend), up, TubeRadius, 0);
-            builder.Tube(Bend(b - forward * bend, b, b - up * bend), up, TubeRadius, 0);
+            builder.Tube(
+                Bend(a - up * bend, a, a + forward * bend),
+                up,
+                TubeRadius,
+                0,
+                startDirection: up,
+                endDirection: forward
+            );
+            builder.Tube(
+                Bend(b - forward * bend, b, b - up * bend),
+                up,
+                TubeRadius,
+                0,
+                startDirection: forward,
+                endDirection: -up
+            );
             builder.Tube(new[] { b - up * bend, end }, forward, TubeRadius, 0);
             var left = a + forward * bend;
             var right = b - forward * bend;
@@ -339,6 +447,8 @@ namespace FluidPipes
             {
                 builder.Ring(point, forward, up, 0.09f, 0.138f, TubeRadius * 0.86f, 0);
             }
+            builder.Support(source, left, forward, up);
+            builder.Support(destination, right, forward, up);
 
             foreach (var point in new[] { start, end })
             {

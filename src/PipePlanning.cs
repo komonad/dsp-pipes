@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection.Emit;
+using FluidPipes.API;
 using HarmonyLib;
 using UnityEngine;
 
@@ -9,11 +10,42 @@ namespace FluidPipes
     [HarmonyPatch(typeof(BuildTool_Path), nameof(BuildTool_Path.DeterminePreviews))]
     internal static class PipePlanning
     {
+        private const int BuildingCollisionMask = 393216;
+        private const float NativeBeltCollisionHeight = 0.22f;
+
         [ThreadStatic]
         private static Vector3[] route;
 
         [ThreadStatic]
         private static float[] distances;
+
+        internal static bool TryCollisionGeometry(
+            BuildTool_Path tool,
+            int mask,
+            out PipeGeometryProfile geometry
+        )
+        {
+            geometry = PipeTypeRegistry.Geometry(tool.handItem?.ID);
+            var defaults = PipeGeometryProfile.Default;
+            return mask == BuildingCollisionMask
+                && PipeTypeRegistry.IsItem(tool.handItem?.ID)
+                && (
+                    geometry.Radius != defaults.Radius
+                    || geometry.CenterHeight != defaults.CenterHeight
+                    || geometry.FittingScale != defaults.FittingScale
+                    || geometry.SupportRingWidth != defaults.SupportRingWidth
+                );
+        }
+
+        internal static Vector3 CollisionCenter(
+            Vector3 nativeQueryPosition,
+            PipeGeometryProfile geometry
+        ) =>
+            nativeQueryPosition
+            + nativeQueryPosition.normalized * (geometry.CenterHeight - NativeBeltCollisionHeight);
+
+        internal static float CollisionRadius(PipeGeometryProfile geometry) =>
+            geometry.Radius * (1 + 0.1f * geometry.FittingScale);
 
         [HarmonyTranspiler]
         public static IEnumerable<CodeInstruction> Transpile(
@@ -59,7 +91,7 @@ namespace FluidPipes
         )
         {
             if (
-                tool.handItem?.ID != Prototypes.ItemId
+                !PipeTypeRegistry.IsUndirected(tool.handItem?.ID)
                 || Mathf.Abs(begin.magnitude - end.magnitude) < 0.01f
                 || forceVertical
             )

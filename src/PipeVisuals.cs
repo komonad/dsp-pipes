@@ -1,20 +1,46 @@
 using System;
 using System.Collections.Generic;
+using FluidPipes.API;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.Rendering;
 
 namespace FluidPipes
 {
-    internal static class PipeVisuals
+    internal static partial class PipeVisuals
     {
         private const float ChunkSize = 16;
+        private const float FluidOpacity = 0.68f;
+
+        private readonly struct ChunkKey : IEquatable<ChunkKey>
+        {
+            internal readonly Vector3Int Cell;
+            internal readonly int ItemId;
+            internal readonly int Group;
+
+            internal ChunkKey(Vector3Int cell, int itemId, int group)
+            {
+                Cell = cell;
+                ItemId = itemId;
+                Group = group;
+            }
+
+            public bool Equals(ChunkKey other) =>
+                Cell == other.Cell && ItemId == other.ItemId && Group == other.Group;
+
+            public override bool Equals(object other) => other is ChunkKey key && Equals(key);
+
+            public override int GetHashCode() =>
+                unchecked((Cell.GetHashCode() * 397 ^ ItemId) * 397 ^ Group);
+        }
 
         private sealed class Chunk
         {
             public readonly HashSet<int> Entities = new HashSet<int>();
             public bool Dirty = true;
             public Mesh Mesh;
+            public Mesh CoreMesh;
+            public int Representative;
             public int MeshedEntities;
             public long LiquidVersion = -1;
             public readonly Dictionary<int, LiquidGroup> Liquids =
@@ -30,6 +56,7 @@ namespace FluidPipes
 
         private sealed class NodeGeometry
         {
+            public int ItemId;
             public PipeMesh Wall;
             public PipeMesh Liquid;
             public NodeShape Shape;
@@ -46,6 +73,10 @@ namespace FluidPipes
             public List<Vector3> EndAxes;
             public List<Vector3> EndUps;
             public List<bool> Collars;
+            public List<float> EndPeerRadiusRatios;
+            public int InteriorOutputEnd;
+            public readonly List<MachineSocketShape> MachineSockets =
+                new List<MachineSocketShape>();
 
             public bool Matches(NodeShape other)
             {
@@ -54,10 +85,19 @@ namespace FluidPipes
                     || !Position.Equals(other.Position)
                     || !Center.Equals(other.Center)
                     || !Up.Equals(other.Up)
+                    || InteriorOutputEnd != other.InteriorOutputEnd
                     || Ends.Count != other.Ends.Count
+                    || MachineSockets.Count != other.MachineSockets.Count
                 )
                 {
                     return false;
+                }
+                for (int index = 0; index < MachineSockets.Count; index++)
+                {
+                    if (!MachineSockets[index].Equals(other.MachineSockets[index]))
+                    {
+                        return false;
+                    }
                 }
 
                 if (Ends.Count == 0 && !Forward.Equals(other.Forward))
@@ -71,6 +111,8 @@ namespace FluidPipes
                         !Ends[index].Equals(other.Ends[index])
                         || !EndAxes[index].Equals(other.EndAxes[index])
                         || !EndUps[index].Equals(other.EndUps[index])
+                        || Collars[index] != other.Collars[index]
+                        || EndPeerRadiusRatios[index] != other.EndPeerRadiusRatios[index]
                     )
                     {
                         return false;
@@ -80,27 +122,80 @@ namespace FluidPipes
                 return true;
             }
 
-            public void AddTo(PipeMesh builder)
+            public void AddTo(PipeMesh builder, bool liquid = false)
             {
-                builder.Node(Center, Up, Forward, Ends, Collars, EndAxes, EndUps);
+                builder.Node(
+                    Center,
+                    Up,
+                    Forward,
+                    Ends,
+                    Collars,
+                    EndAxes,
+                    EndUps,
+                    EndPeerRadiusRatios
+                );
+                if (!liquid)
+                {
+                    foreach (var socket in MachineSockets)
+                    {
+                        builder.MachinePort(socket.Anchor, socket.Orientation, socket.OutletHeight);
+                    }
+                }
+            }
+
+            public void AddInteriorTo(PipeMesh builder, PipeInteriorProfile profile)
+            {
+                builder.InteriorNode(
+                    Center,
+                    Up,
+                    Forward,
+                    Ends,
+                    EndAxes,
+                    EndUps,
+                    profile,
+                    InteriorOutputEnd
+                );
+            }
+        }
+
+        private readonly struct MachineSocketShape
+        {
+            public readonly Vector3 Anchor;
+            public readonly Quaternion Orientation;
+            public readonly float OutletHeight;
+
+            public MachineSocketShape(Vector3 anchor, Quaternion orientation, float outletHeight)
+            {
+                Anchor = anchor;
+                Orientation = orientation;
+                OutletHeight = outletHeight;
             }
         }
 
         private static PlanetFactory current;
-        private static readonly Dictionary<Vector3Int, Chunk> chunks =
-            new Dictionary<Vector3Int, Chunk>();
-        private static readonly Dictionary<int, Vector3Int> keys =
-            new Dictionary<int, Vector3Int>();
+        private static readonly object colliderChangesLock = new object();
+        private static int colliderChangesEpoch;
+        private static Dictionary<PlanetFactory, HashSet<int>> colliderChanges =
+            new Dictionary<PlanetFactory, HashSet<int>>();
+        private static readonly Dictionary<ChunkKey, Chunk> chunks =
+            new Dictionary<ChunkKey, Chunk>();
+        private static readonly Dictionary<int, ChunkKey> keys = new Dictionary<int, ChunkKey>();
         private static readonly Dictionary<int, NodeGeometry> geometry =
             new Dictionary<int, NodeGeometry>();
         private static readonly Plane[] planes = new Plane[6];
         private static Material body;
         private static Material joint;
+        private static Material machinePanel;
+        private static Material machineShell;
         private static Material innerBody;
         private static readonly Dictionary<int, Material> liquids = new Dictionary<int, Material>();
-        private static readonly List<Texture2D> liquidTints = new List<Texture2D>();
+        private static readonly Dictionary<int, Texture2D> liquidTints =
+            new Dictionary<int, Texture2D>();
+        private static readonly Dictionary<int, Color> liquidColors = new Dictionary<int, Color>();
         private static Cubemap steelEnvironment;
         private static MaterialPropertyBlock steelLighting;
+        private static readonly MaterialPropertyBlock effectProperties =
+            new MaterialPropertyBlock();
         public static int Rebuilds { get; private set; }
         public static int NodeRebuilds { get; private set; }
         public static int LiquidRebuilds { get; private set; }
@@ -110,6 +205,30 @@ namespace FluidPipes
             {
                 var material = BodyMaterial;
                 return joint;
+            }
+        }
+        internal static Material InnerWallMaterial
+        {
+            get
+            {
+                var initialized = BodyMaterial;
+                return innerBody;
+            }
+        }
+        internal static Material MachinePanelMaterial
+        {
+            get
+            {
+                var initialized = BodyMaterial;
+                return machinePanel;
+            }
+        }
+        internal static Material MachineShellMaterial
+        {
+            get
+            {
+                var initialized = BodyMaterial;
+                return machineShell;
             }
         }
         public static Material BodyMaterial
@@ -172,6 +291,23 @@ namespace FluidPipes
                     joint = new Material(shader);
                     joint.name = "FluidPipes.Coupling";
                     joint.color = new Color(0.82f, 0.84f, 0.86f);
+                    machinePanel = new Material(shader)
+                    {
+                        name = "FluidPipes.MachinePanel",
+                        color = new Color(0.27f, 0.31f, 0.34f),
+                    };
+                    machinePanel.SetFloat("_Metallic", 0.12f);
+                    machinePanel.SetFloat("_Glossiness", 0.38f);
+                    machineShell = new Material(shader)
+                    {
+                        name = "FluidPipes.MachineShell",
+                        color = new Color(0.80f, 0.83f, 0.85f),
+                    };
+                    machineShell.SetFloat("_Metallic", 0);
+                    machineShell.SetFloat("_Glossiness", 0.46f);
+                    // Ambient fill preserves dielectric color within recessed machine sockets.
+                    machineShell.EnableKeyword("_EMISSION");
+                    machineShell.SetColor("_EmissionColor", new Color(0.20f, 0.22f, 0.24f));
                     if (body.HasProperty("_Metallic"))
                     {
                         body.SetFloat("_Metallic", 0.02f);
@@ -335,57 +471,48 @@ namespace FluidPipes
             material.renderQueue = queue;
         }
 
-        private static Vector3Int Key(Vector3 position) =>
-            new Vector3Int(
+        private static ChunkKey Key(PlanetFactory factory, int entityId)
+        {
+            var entity = factory.entityPool[entityId];
+            Vector3 position = entity.pos;
+            var cell = new Vector3Int(
                 Mathf.FloorToInt(position.x / ChunkSize),
                 Mathf.FloorToInt(position.y / ChunkSize),
                 Mathf.FloorToInt(position.z / ChunkSize)
             );
+            int group = PipeMaterialLibrary.BatchGroup(factory, entityId);
+            return new ChunkKey(cell, entity.protoId, group);
+        }
 
         public static Material LiquidMaterial(int item)
         {
-            if (liquids.TryGetValue(item, out var material))
+            Color color = FluidAppearance.LinearColor(item);
+            color.a = FluidOpacity;
+            if (liquids.TryGetValue(item, out var material) && liquidColors[item] == color)
             {
                 return material;
             }
 
-            var wall = BodyMaterial;
-            var fluidShader = Shader.Find("Unlit/Transparent") ?? Shader.Find("Sprites/Default");
-            material = fluidShader == null ? new Material(wall) : new Material(fluidShader);
-            material.name = "FluidPipes.Liquid." + item;
-            Color color;
-            switch (item)
+            if (material == null)
             {
-                case 1000:
-                    color = new Color(0.25f, 0.7f, 0.75f);
-                    break;
-                case 1007:
-                    color = new Color(0.15f, 0.08f, 0.025f);
-                    break;
-                case 1114:
-                    color = new Color(0.75f, 0.39f, 0.045f);
-                    break;
-                case 1116:
-                    color = new Color(0.92f, 0.8f, 0.12f);
-                    break;
-                case 1120:
-                    color = new Color(0.76f, 0.22f, 0.34f);
-                    break;
-                case 1121:
-                    color = new Color(0.77f, 0.62f, 0.11f);
-                    break;
-                default:
-                    color = Color.HSVToRGB((item * 0.618034f) % 1, 0.55f, 0.65f);
-                    break;
+                var wall = BodyMaterial;
+                var fluidShader =
+                    Shader.Find("Unlit/Transparent") ?? Shader.Find("Sprites/Default");
+                material = fluidShader == null ? new Material(wall) : new Material(fluidShader);
+                material.name = "FluidPipes.Liquid." + item;
             }
-            color.a = 0.32f;
-            var tint = new Texture2D(1, 1, TextureFormat.RGBA32, false)
+            if (liquidTints.TryGetValue(item, out var previousTint))
+            {
+                UnityEngine.Object.Destroy(previousTint);
+            }
+            var tint = new Texture2D(1, 1, TextureFormat.RGBAHalf, false, true)
             {
                 name = "FluidPipes.FluidTint." + item,
             };
             tint.SetPixel(0, 0, color);
             tint.Apply(false, true);
-            liquidTints.Add(tint);
+            liquidTints[item] = tint;
+            liquidColors[item] = color;
             if (material.HasProperty("_Color"))
             {
                 material.color = Color.white;
@@ -414,7 +541,7 @@ namespace FluidPipes
                 material.EnableKeyword("_EMISSION");
                 material.SetColor("_EmissionColor", color * 0.06f);
             }
-            liquids.Add(item, material);
+            liquids[item] = material;
             return material;
         }
 
@@ -430,17 +557,27 @@ namespace FluidPipes
             chunk.Liquids.Clear();
         }
 
-        private static Vector3 Origin(Vector3Int key) =>
-            new Vector3(key.x * ChunkSize, key.y * ChunkSize, key.z * ChunkSize);
+        private static Vector3 Origin(ChunkKey key) =>
+            new Vector3(key.Cell.x * ChunkSize, key.Cell.y * ChunkSize, key.Cell.z * ChunkSize);
 
         public static void Clear()
         {
+            lock (colliderChangesLock)
+            {
+                colliderChanges.Clear();
+                colliderChangesEpoch++;
+            }
             foreach (var chunk in chunks.Values)
             {
                 if (chunk.Mesh != null)
                 {
                     UnityEngine.Object.Destroy(chunk.Mesh);
                 }
+                if (chunk.CoreMesh != null)
+                {
+                    UnityEngine.Object.Destroy(chunk.CoreMesh);
+                }
+
                 FreeLiquids(chunk);
             }
             chunks.Clear();
@@ -453,7 +590,8 @@ namespace FluidPipes
         public static void Dispose()
         {
             Clear();
-            foreach (var material in new[] { body, joint, innerBody })
+            PipeMaterialLibrary.Dispose();
+            foreach (var material in new[] { body, joint, innerBody, machinePanel, machineShell })
             {
                 if (material != null)
                 {
@@ -461,27 +599,33 @@ namespace FluidPipes
                 }
             }
 
-            body = joint = innerBody = null;
+            body = joint = innerBody = machinePanel = machineShell = null;
             foreach (var material in liquids.Values)
             {
                 UnityEngine.Object.Destroy(material);
             }
 
             liquids.Clear();
-            foreach (var texture in liquidTints)
+            foreach (var texture in liquidTints.Values)
             {
                 UnityEngine.Object.Destroy(texture);
             }
 
             liquidTints.Clear();
+            liquidColors.Clear();
             FreeSteelLighting();
         }
 
-        private static void Mark(int entity)
+        private static void Mark(int entity, bool refreshCollider = true)
         {
             if (current == null || entity <= 0 || entity >= current.entityPool.Length)
             {
                 return;
+            }
+
+            if (refreshCollider)
+            {
+                QueueColliderChange(current, entity);
             }
 
             if (geometry.TryGetValue(entity, out var cached))
@@ -507,8 +651,8 @@ namespace FluidPipes
                 }
                 return;
             }
-            var key = Key(current.entityPool[entity].pos);
-            if (keys.TryGetValue(entity, out old) && old != key)
+            var key = Key(current, entity);
+            if (keys.TryGetValue(entity, out old) && !old.Equals(key))
             {
                 chunks[old].Entities.Remove(entity);
             }
@@ -525,17 +669,17 @@ namespace FluidPipes
 
         public static void Dirty(PlanetFactory factory, int entity)
         {
-            if (factory != current || entity <= 0)
+            if (factory == null || entity <= 0 || entity >= factory.entityPool.Length)
             {
                 return;
             }
 
-            Mark(entity);
+            DirtyNode(factory, entity);
             foreach (int other in PipeTopology.Neighbors(factory, entity))
             {
                 if (other > 0)
                 {
-                    Mark(other);
+                    DirtyNode(factory, other);
                 }
             }
 
@@ -544,7 +688,74 @@ namespace FluidPipes
                 factory.ReadObjectConn(entity, slot, out _, out int other, out _);
                 if (other > 0 && PipeRuntime.IsPipeObject(factory, other))
                 {
-                    Mark(other);
+                    DirtyNode(factory, other);
+                }
+            }
+        }
+
+        private static void DirtyNode(PlanetFactory factory, int entity)
+        {
+            QueueColliderChange(factory, entity);
+            if (factory == current && PipeTypeRegistry.IsMainThread)
+            {
+                Mark(entity, false);
+            }
+        }
+
+        private static void QueueColliderChange(PlanetFactory factory, int entity)
+        {
+            if (factory.planet?.physics?.colChunks == null)
+            {
+                return;
+            }
+            lock (colliderChangesLock)
+            {
+                if (!colliderChanges.TryGetValue(factory, out var changedEntities))
+                {
+                    colliderChanges.Add(factory, changedEntities = new HashSet<int>());
+                }
+                changedEntities.Add(entity);
+            }
+        }
+
+        internal static void FlushColliderChanges()
+        {
+            if (!PipeTypeRegistry.IsMainThread)
+            {
+                return;
+            }
+
+            Dictionary<PlanetFactory, HashSet<int>> pending;
+            int epoch;
+            lock (colliderChangesLock)
+            {
+                if (colliderChanges.Count == 0)
+                {
+                    return;
+                }
+                pending = colliderChanges;
+                epoch = colliderChangesEpoch;
+                colliderChanges = new Dictionary<PlanetFactory, HashSet<int>>();
+            }
+
+            foreach (var factoryChanges in pending)
+            {
+                var factory = factoryChanges.Key;
+                var colliderChunks = factory.planet?.physics?.colChunks;
+                foreach (int entity in factoryChanges.Value)
+                {
+                    if (System.Threading.Volatile.Read(ref colliderChangesEpoch) != epoch)
+                    {
+                        return;
+                    }
+                    if (factory == current)
+                    {
+                        Mark(entity, false);
+                    }
+                    if (colliderChunks != null)
+                    {
+                        UpdateCollider(factory, entity, colliderChunks);
+                    }
                 }
             }
         }
@@ -572,14 +783,37 @@ namespace FluidPipes
             }
         }
 
-        private static Vector3 Center(Vector3 point) =>
-            point + point.normalized * (PipeMesh.Radius + 0.06f);
+        private static Vector3 Center(PlanetFactory factory, int entityId)
+        {
+            EntityData entity = factory.entityPool[entityId];
+            return entity.pos
+                + entity.pos.normalized * PipeTypeRegistry.Geometry(entity.protoId).CenterHeight;
+        }
 
-        private static PipeMesh NodeMesh(PlanetFactory factory, int entityId, bool liquid)
+        internal static PipeMesh SelectionGeometry(PlanetFactory factory, int entityId)
+        {
+            Initialize(factory);
+            FlushColliderChanges();
+            bool open =
+                PipeTypeRegistry
+                    .Get(factory.entityPool[entityId].protoId)
+                    ?.Definition.Appearance?.WallMode == PipeWallMode.Open;
+            return NodeMesh(factory, entityId, open);
+        }
+
+        private static NodeGeometry GetNodeGeometry(PlanetFactory factory, int entityId)
         {
             if (!geometry.TryGetValue(entityId, out var node))
             {
                 geometry.Add(entityId, node = new NodeGeometry());
+            }
+
+            int itemId = factory.entityPool[entityId].protoId;
+            if (node.ItemId != itemId)
+            {
+                node.ItemId = itemId;
+                node.Wall = node.Liquid = null;
+                node.Dirty = true;
             }
 
             if (node.Dirty)
@@ -592,14 +826,52 @@ namespace FluidPipes
                 }
                 node.Dirty = false;
             }
+            return node;
+        }
+
+        private static PipeMesh NodeMesh(PlanetFactory factory, int entityId, bool liquid)
+        {
+            var node = GetNodeGeometry(factory, entityId);
+            int itemId = node.ItemId;
             var mesh = liquid ? node.Liquid : node.Wall;
             if (mesh != null)
             {
                 return mesh;
             }
 
-            mesh = new PipeMesh(liquid ? PipeMesh.Radius * 0.76f : PipeMesh.Radius, !liquid);
-            node.Shape.AddTo(mesh);
+            var definition = PipeTypeRegistry.Get(itemId)?.Definition;
+            var appearance = definition?.Appearance;
+            var dimensions = definition?.Geometry ?? PipeGeometryProfile.Default;
+            float internalRadius =
+                definition?.Behavior == PipeBehavior.Structure
+                    ? appearance?.CoreRadiusFraction ?? 0.45f
+                    : 0.76f;
+            var interior =
+                liquid && definition?.Behavior == PipeBehavior.Structure
+                    ? appearance?.Interior
+                    : null;
+            mesh = new PipeMesh(
+                liquid && interior == null ? dimensions.Radius * internalRadius : dimensions.Radius,
+                !liquid,
+                PipeMaterialLibrary.TextureCoordinate(itemId),
+                factory.entityPool[entityId].pos,
+                dimensions,
+                appearance?.TextureCoordinatePeriod ?? 0
+            );
+            if (!liquid && appearance?.WallMode == PipeWallMode.Open)
+            {
+                node.Wall = mesh;
+                NodeRebuilds++;
+                return mesh;
+            }
+            if (interior == null)
+            {
+                node.Shape.AddTo(mesh, liquid);
+            }
+            else
+            {
+                node.Shape.AddInteriorTo(mesh, interior);
+            }
             if (liquid)
             {
                 node.Liquid = mesh;
@@ -626,6 +898,15 @@ namespace FluidPipes
             ColliderContainer[] chunks
         )
         {
+            if (entityId <= 0 || !PipeRuntime.IsPipeObject(factory, entityId))
+            {
+                return;
+            }
+            if (!PipeTypeRegistry.IsMainThread)
+            {
+                QueueColliderChange(factory, entityId);
+                return;
+            }
             int encoded = factory.entityPool[entityId].colliderId;
             if (encoded <= 0 || chunks == null)
             {
@@ -645,8 +926,9 @@ namespace FluidPipes
             }
 
             var entity = factory.entityPool[entityId];
+            var dimensions = PipeTypeRegistry.Geometry(entity.protoId);
             var inverse = Quaternion.Inverse(entity.rot);
-            var shape = Shape(factory, entityId, entity.pos);
+            var shape = CreateShape(factory, entityId, entity.pos, false);
             var bounds = new Bounds(inverse * shape.Center, Vector3.zero);
             foreach (var point in shape.Ends)
             {
@@ -655,34 +937,77 @@ namespace FluidPipes
 
             if (shape.Ends.Count == 0)
             {
-                bounds.Encapsulate(inverse * (shape.Center + shape.Forward * 0.35f));
-                bounds.Encapsulate(inverse * (shape.Center - shape.Forward * 0.35f));
+                float halfLength = 0.35f * dimensions.Radius / PipeMesh.Radius;
+                bounds.Encapsulate(inverse * (shape.Center + shape.Forward * halfLength));
+                bounds.Encapsulate(inverse * (shape.Center - shape.Forward * halfLength));
             }
-            bounds.Expand(PipeMesh.Radius * 2);
+            bounds.Expand(dimensions.Radius * (1 + 0.1f * dimensions.FittingScale) * 2);
             ref var collider = ref chunks[chunk].colliderPool[index];
-            collider.pos = entity.pos + entity.rot * bounds.center;
+            Vector3 position = entity.pos + entity.rot * bounds.center;
+            if (
+                collider.pos.Equals(position)
+                && collider.q.Equals(entity.rot)
+                && collider.ext.Equals(bounds.extents)
+            )
+            {
+                return;
+            }
+            collider.pos = position;
             collider.q = entity.rot;
             collider.ext = bounds.extents;
+            var physics = factory.planet?.physics;
+            if (physics != null && ReferenceEquals(physics.colChunks, chunks))
+            {
+                physics.SetPlanetPhysicsColliderDirty();
+            }
         }
 
         private static NodeShape Shape(PlanetFactory factory, int entityId2, Vector3 origin)
         {
+            return CreateShape(factory, entityId2, origin, true);
+        }
+
+        private static NodeShape CreateShape(
+            PlanetFactory factory,
+            int entityId2,
+            Vector3 origin,
+            bool resolveCollars
+        )
+        {
             var entity = factory.entityPool[entityId2];
-            var center = Center(entity.pos);
+            bool undirected = PipeTypeRegistry.IsUndirected(entity.protoId);
+            bool useTopology = undirected && PipeTopology.Contains(factory, entityId2);
+            var dimensions = PipeTypeRegistry.Geometry(entity.protoId);
+            var center = Center(factory, entityId2);
             var ends = new List<Vector3>(4);
             var collars = new List<bool>(4);
-            foreach (int other in PipeTopology.Neighbors(factory, entityId2))
+            var peerRadiusRatios = new List<float>(4);
+            var connectedPipes = new List<int>(4);
+            int interiorOutputEnd = -1;
+            var socketShapes = new List<MachineSocketShape>();
+            var socketAxes = new Dictionary<int, Vector3>();
+            var socketFrames = new Dictionary<int, Vector3>();
+            foreach (
+                int other in useTopology
+                    ? PipeTopology.Neighbors(factory, entityId2)
+                    : Array.Empty<int>()
+            )
             {
                 if (
                     other <= 0
                     || other >= factory.entityPool.Length
                     || !PipeRuntime.IsPipeObject(factory, other)
+                    || !PipeRuntime.IsPipe(factory.cargoTraffic, factory.entityPool[other].beltId)
+                    || !PipeTypeRegistry.Compatible(
+                        entity.protoId,
+                        factory.entityPool[other].protoId
+                    )
                 )
                 {
                     continue;
                 }
 
-                var end = (center + Center(factory.entityPool[other].pos)) * 0.5f;
+                var end = (center + Center(factory, other)) * 0.5f;
                 if ((end - center).sqrMagnitude < 0.00001f)
                 {
                     continue;
@@ -690,10 +1015,21 @@ namespace FluidPipes
 
                 ends.Add(end - origin);
                 collars.Add(entityId2 < other);
+                connectedPipes.Add(other);
+                peerRadiusRatios.Add(
+                    PipeTypeRegistry.Geometry(factory.entityPool[other].protoId).Radius
+                        / dimensions.Radius
+                );
             }
             for (int slot = 0; slot < 4; slot++)
             {
-                factory.ReadObjectConn(entityId2, slot, out _, out int other, out int otherSlot);
+                factory.ReadObjectConn(
+                    entityId2,
+                    slot,
+                    out bool output,
+                    out int other,
+                    out int otherSlot
+                );
                 if (
                     other <= 0
                     || other >= factory.entityPool.Length
@@ -705,7 +1041,7 @@ namespace FluidPipes
 
                 var peer = factory.entityPool[other];
                 bool pipe = PipeRuntime.IsPipeObject(factory, other);
-                if (pipe && PipeTopology.Contains(factory, entityId2))
+                if (pipe && useTopology)
                 {
                     continue;
                 }
@@ -713,11 +1049,24 @@ namespace FluidPipes
                 Vector3 end;
                 if (pipe)
                 {
-                    end = (center + Center(peer.pos)) * 0.5f;
+                    if (
+                        !PipeConnections.TryReadNativeLink(factory, entityId2, slot, out _, out _)
+                        || !PipeRuntime.IsPipe(factory.cargoTraffic, peer.beltId)
+                    )
+                    {
+                        continue;
+                    }
+                    end = (center + Center(factory, other)) * 0.5f;
                 }
                 else
                 {
-                    var ports = LDB.items.Select(peer.protoId)?.prefabDesc?.portPoses;
+                    if (!PipeRuntime.HasInventory(factory, entityId2))
+                    {
+                        continue;
+                    }
+                    var machine = PipeMachinePorts.MachineDescription(factory, other);
+                    var ports =
+                        machine?.slotPoses ?? LDB.items.Select(peer.protoId)?.prefabDesc?.portPoses;
                     if (ports == null || otherSlot < 0 || otherSlot >= ports.Length)
                     {
                         continue;
@@ -726,7 +1075,26 @@ namespace FluidPipes
                     end =
                         peer.pos
                         + peer.rot * ports[otherSlot].position
-                        + entity.pos.normalized * (PipeMesh.Radius + 0.06f);
+                        + (
+                            machine == null
+                                ? entity.pos.normalized * PipeMesh.CenterHeight
+                                : Vector3.zero
+                        );
+                    if (machine != null)
+                    {
+                        Vector3 anchor = peer.pos + peer.rot * ports[otherSlot].position;
+                        Quaternion orientation = peer.rot * ports[otherSlot].rotation;
+                        Vector3 socketUp = orientation * Vector3.up;
+                        Vector3 outward = orientation * Vector3.forward;
+                        float outletHeight = Vector3.Dot(center - anchor, socketUp);
+                        end =
+                            anchor + socketUp * outletHeight + outward * PipeMesh.MachinePortDepth;
+                        socketShapes.Add(
+                            new MachineSocketShape(anchor - origin, orientation, outletHeight)
+                        );
+                        socketAxes[ends.Count] = -outward;
+                        socketFrames[ends.Count] = socketUp;
+                    }
                 }
                 if ((end - center).sqrMagnitude < 0.00001f)
                 {
@@ -734,9 +1102,19 @@ namespace FluidPipes
                 }
 
                 ends.Add(end - origin);
-                collars.Add(!pipe || entityId2 < other);
+                connectedPipes.Add(pipe ? other : 0);
+                if (pipe && output)
+                {
+                    interiorOutputEnd = ends.Count - 1;
+                }
+                peerRadiusRatios.Add(
+                    pipe ? PipeTypeRegistry.Geometry(peer.protoId).Radius / dimensions.Radius : 1
+                );
+                collars.Add(
+                    !socketAxes.ContainsKey(ends.Count - 1) && (!pipe || entityId2 < other)
+                );
             }
-            if (ends.Count == 0 && !PipeTopology.Contains(factory, entityId2))
+            if (ends.Count == 0 && undirected && !useTopology)
             {
                 int belt = entity.beltId;
                 if (belt > 0)
@@ -755,10 +1133,22 @@ namespace FluidPipes
                         if (PipeRuntime.IsPipe(factory.cargoTraffic, peerBelt))
                         {
                             int peer = factory.cargoTraffic.beltPool[peerBelt].entityId;
-                            ends.Add(
-                                (center + Center(factory.entityPool[peer].pos)) * 0.5f - origin
-                            );
+                            if (
+                                !PipeTypeRegistry.Compatible(
+                                    entity.protoId,
+                                    factory.entityPool[peer].protoId
+                                )
+                            )
+                            {
+                                continue;
+                            }
+                            ends.Add((center + Center(factory, peer)) * 0.5f - origin);
+                            connectedPipes.Add(peer);
                             collars.Add(entityId2 < peer);
+                            peerRadiusRatios.Add(
+                                PipeTypeRegistry.Geometry(factory.entityPool[peer].protoId).Radius
+                                    / dimensions.Radius
+                            );
                         }
                     }
                 }
@@ -767,10 +1157,18 @@ namespace FluidPipes
             var frames = new List<Vector3>(ends.Count);
             foreach (var end in ends)
             {
-                axes.Add((end - (center - origin)).normalized);
-                frames.Add((end + origin).normalized);
+                axes.Add(
+                    socketAxes.TryGetValue(axes.Count, out var socketAxis)
+                        ? socketAxis
+                        : (end - (center - origin)).normalized
+                );
+                frames.Add(
+                    socketFrames.TryGetValue(frames.Count, out var socketUp)
+                        ? socketUp
+                        : (end + origin).normalized
+                );
             }
-            return new NodeShape
+            var shape = new NodeShape
             {
                 Position = entity.pos,
                 Center = center - origin,
@@ -778,9 +1176,98 @@ namespace FluidPipes
                 Forward = entity.rot * Vector3.forward,
                 Ends = ends,
                 Collars = collars,
+                EndPeerRadiusRatios = peerRadiusRatios,
+                InteriorOutputEnd = undirected ? -2 : interiorOutputEnd,
                 EndAxes = axes,
                 EndUps = frames,
             };
+            shape.MachineSockets.AddRange(socketShapes);
+            if (resolveCollars)
+            {
+                bool needsFittings = PipeMesh.NeedsJointFittings(shape.Center, ends);
+                for (int endIndex = 0; endIndex < ends.Count; endIndex++)
+                {
+                    int peer = connectedPipes[endIndex];
+                    if (peer == 0)
+                    {
+                        continue;
+                    }
+                    float peerRadiusRatio = peerRadiusRatios[endIndex];
+                    if (peerRadiusRatio < 0.9999f)
+                    {
+                        collars[endIndex] = true;
+                    }
+                    else if (peerRadiusRatio > 1f / 0.9999f || !needsFittings)
+                    {
+                        collars[endIndex] = false;
+                    }
+                    else
+                    {
+                        var peerShape = CreateShape(factory, peer, origin, false);
+                        collars[endIndex] =
+                            !PipeMesh.NeedsJointFittings(peerShape.Center, peerShape.Ends)
+                            || entityId2 < peer;
+                    }
+                }
+            }
+            return shape;
+        }
+
+        private static void DrawSurface(
+            PlanetFactory factory,
+            Camera camera,
+            ChunkKey key,
+            Chunk chunk,
+            PipeMaterialSet surfaces,
+            Mesh mesh,
+            Matrix4x4 transform,
+            Vector3 radial,
+            int submesh,
+            PipeSurfaceRole role
+        )
+        {
+            Material surface = surfaces.Get(role);
+            if (surface == null)
+            {
+                return;
+            }
+            var properties = SteelLighting(radial);
+            var definition = PipeTypeRegistry.Get(key.ItemId)?.Definition;
+            if (definition?.Appearance?.ApplyEffects != null)
+            {
+                effectProperties.Clear();
+                effectProperties.SetTexture("unity_SpecCube0", steelEnvironment);
+                effectProperties.SetTexture("unity_SpecCube1", steelEnvironment);
+                effectProperties.SetVector("unity_SpecCube0_HDR", new Vector4(1, 1, 0, 0));
+                effectProperties.SetVector("unity_SpecCube1_HDR", new Vector4(1, 1, 0, 0));
+                effectProperties.SetVector("unity_SpecCube0_BoxMin", new Vector4(0, 0, 0, 1));
+                effectProperties.SetVector("unity_SpecCube0_ProbePosition", Vector4.zero);
+                effectProperties.SetVector("unity_SpecCube1_ProbePosition", Vector4.zero);
+                if (
+                    PipeMaterialLibrary.Effects(
+                        key.ItemId,
+                        new PipeEffectContext(factory, chunk.Representative, key.Group, role),
+                        effectProperties
+                    )
+                )
+                {
+                    properties = effectProperties;
+                }
+            }
+            Graphics.DrawMesh(
+                mesh,
+                transform,
+                surface,
+                0,
+                camera,
+                submesh,
+                properties,
+                role == PipeSurfaceRole.Fittings
+                || role == PipeSurfaceRole.Wall && surfaces.WallMode == PipeWallMode.Opaque
+                    ? ShadowCastingMode.On
+                    : ShadowCastingMode.Off,
+                true
+            );
         }
 
         public static int Draw(PlanetFactory factory, Camera camera)
@@ -791,6 +1278,7 @@ namespace FluidPipes
             }
 
             Initialize(factory);
+            FlushColliderChanges();
             if (chunks.Count == 0)
             {
                 return 0;
@@ -803,9 +1291,11 @@ namespace FluidPipes
             foreach (var entry in chunks)
             {
                 var origin = Origin(entry.Key);
+                var dimensions = PipeTypeRegistry.Geometry(entry.Key.ItemId);
+                float padding = 8 + dimensions.CenterHeight + dimensions.Radius * 2;
                 var bounds = new Bounds(
                     origin + Vector3.one * ChunkSize * 0.5f,
-                    Vector3.one * (ChunkSize + 8)
+                    Vector3.one * (ChunkSize + padding)
                 );
                 if (!GeometryUtility.TestPlanesAABB(planes, bounds))
                 {
@@ -813,6 +1303,9 @@ namespace FluidPipes
                 }
 
                 var chunk = entry.Value;
+                var type = PipeTypeRegistry.Get(entry.Key.ItemId)?.Definition;
+                var surfaces = PipeMaterialLibrary.Get(entry.Key.ItemId);
+                material = surfaces.Wall;
                 if (chunk.Dirty)
                 {
                     int before = NodeRebuilds;
@@ -828,12 +1321,25 @@ namespace FluidPipes
                     )
                     {
                         var builder = new PipeMesh();
+                        var coreBuilder = new PipeMesh();
+                        chunk.Representative = 0;
                         foreach (int entityId2 in chunk.Entities)
                         {
                             builder.Append(
                                 NodeMesh(factory, entityId2, false),
                                 factory.entityPool[entityId2].pos - origin
                             );
+                            chunk.Representative = entityId2;
+                            if (
+                                type?.Behavior == PipeBehavior.Structure
+                                && type.Appearance?.HasCore == true
+                            )
+                            {
+                                coreBuilder.Append(
+                                    NodeMesh(factory, entityId2, true),
+                                    factory.entityPool[entityId2].pos - origin
+                                );
+                            }
                         }
 
                         if (chunk.Mesh != null)
@@ -845,18 +1351,30 @@ namespace FluidPipes
                             builder.VertexCount == 0
                                 ? null
                                 : builder.Build("FluidPipes.Chunk", true);
+                        if (chunk.CoreMesh != null)
+                        {
+                            UnityEngine.Object.Destroy(chunk.CoreMesh);
+                        }
+
+                        chunk.CoreMesh =
+                            coreBuilder.VertexCount == 0
+                                ? null
+                                : coreBuilder.Build("FluidPipes.Conductor");
                         chunk.MeshedEntities = chunk.Entities.Count;
                         Rebuilds++;
                         chunk.LiquidVersion = -1;
                     }
                     chunk.Dirty = false;
                 }
-                if (chunk.Mesh == null)
+                if (chunk.Mesh == null && chunk.CoreMesh == null)
                 {
                     continue;
                 }
 
-                if (chunk.LiquidVersion != graph.TopologyVersion)
+                if (
+                    type?.Behavior == PipeBehavior.SharedInventory
+                    && chunk.LiquidVersion != graph.TopologyVersion
+                )
                 {
                     FreeLiquids(chunk);
                     foreach (int entityId3 in chunk.Entities)
@@ -875,41 +1393,117 @@ namespace FluidPipes
                     chunk.LiquidVersion = graph.TopologyVersion;
                 }
                 var transform = Matrix4x4.Translate(origin);
-                // Draw every far-facing inner wall before near-facing outer walls, independently of node and chunk order.
-                Graphics.DrawMesh(
-                    chunk.Mesh,
-                    transform,
-                    innerBody,
-                    0,
-                    camera,
-                    2,
-                    null,
-                    ShadowCastingMode.Off,
-                    false
-                );
-                Graphics.DrawMesh(
-                    chunk.Mesh,
-                    transform,
-                    material,
-                    0,
-                    camera,
-                    0,
-                    null,
-                    ShadowCastingMode.Off,
-                    false
-                );
-                Graphics.DrawMesh(
-                    chunk.Mesh,
-                    transform,
-                    joint,
-                    0,
-                    camera,
-                    1,
-                    SteelLighting(bounds.center),
-                    ShadowCastingMode.On,
-                    true
-                );
+                if (chunk.Mesh != null)
+                {
+                    if (surfaces.WallMode != PipeWallMode.Opaque)
+                    {
+                        DrawSurface(
+                            factory,
+                            camera,
+                            entry.Key,
+                            chunk,
+                            surfaces,
+                            chunk.Mesh,
+                            transform,
+                            bounds.center,
+                            2,
+                            PipeSurfaceRole.InnerWall
+                        );
+                    }
+
+                    DrawSurface(
+                        factory,
+                        camera,
+                        entry.Key,
+                        chunk,
+                        surfaces,
+                        chunk.Mesh,
+                        transform,
+                        bounds.center,
+                        0,
+                        PipeSurfaceRole.Wall
+                    );
+                    DrawSurface(
+                        factory,
+                        camera,
+                        entry.Key,
+                        chunk,
+                        surfaces,
+                        chunk.Mesh,
+                        transform,
+                        bounds.center,
+                        1,
+                        PipeSurfaceRole.Fittings
+                    );
+                    if (chunk.Mesh.subMeshCount > 3)
+                    {
+                        DrawSurface(
+                            factory,
+                            camera,
+                            entry.Key,
+                            chunk,
+                            surfaces,
+                            chunk.Mesh,
+                            transform,
+                            bounds.center,
+                            3,
+                            PipeSurfaceRole.MachinePanel
+                        );
+                    }
+
+                    if (chunk.Mesh.subMeshCount > 4)
+                    {
+                        DrawSurface(
+                            factory,
+                            camera,
+                            entry.Key,
+                            chunk,
+                            surfaces,
+                            chunk.Mesh,
+                            transform,
+                            bounds.center,
+                            4,
+                            PipeSurfaceRole.MachineShell
+                        );
+                    }
+                }
+
+                if (chunk.CoreMesh != null)
+                {
+                    if (chunk.CoreMesh.GetIndexCount(0) > 0)
+                    {
+                        DrawSurface(
+                            factory,
+                            camera,
+                            entry.Key,
+                            chunk,
+                            surfaces,
+                            chunk.CoreMesh,
+                            transform,
+                            bounds.center,
+                            0,
+                            PipeSurfaceRole.Core
+                        );
+                    }
+                    if (chunk.CoreMesh.GetIndexCount(1) > 0)
+                    {
+                        DrawSurface(
+                            factory,
+                            camera,
+                            entry.Key,
+                            chunk,
+                            surfaces,
+                            chunk.CoreMesh,
+                            transform,
+                            bounds.center,
+                            1,
+                            PipeSurfaceRole.Fittings
+                        );
+                    }
+                }
+
                 drawn++;
+
                 foreach (var group in chunk.Liquids.Values)
                 {
                     var view = PipePools.Query(graph, group.Representative);
@@ -920,7 +1514,7 @@ namespace FluidPipes
 
                     if (group.Mesh == null)
                     {
-                        var builder = new PipeMesh(PipeMesh.Radius * 0.76f, false);
+                        var builder = new PipeMesh();
                         foreach (int entityId4 in group.Entities)
                         {
                             builder.Append(

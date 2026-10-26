@@ -7,6 +7,12 @@ namespace FluidPipes.Integration.Belts
     [HarmonyPatch]
     internal static class PipeLifecyclePatches
     {
+        internal sealed class RemovalState
+        {
+            internal int EntityId;
+            internal int[] Neighbors;
+        }
+
         [ThreadStatic]
         private static HashSet<Tuple<CargoTraffic, int>> removals;
 
@@ -14,7 +20,7 @@ namespace FluidPipes.Integration.Belts
         public static void NewBelt(CargoTraffic __instance, int entityId, int __result)
         {
             PipeRuntime.Bind(__instance);
-            if (__instance.factory.entityPool[entityId].protoId == Prototypes.ItemId)
+            if (PipeTypeRegistry.IsItem(__instance.factory.entityPool[entityId].protoId))
             {
                 PipeRuntime.Bind(__instance).Add(entityId);
                 for (int slot = 0; slot < 4; slot++)
@@ -36,9 +42,13 @@ namespace FluidPipes.Integration.Belts
             {
                 if (PipeRuntime.IsPipe(__instance, index))
                 {
-                    PipeRuntime.UseObjectLinks(__instance, __instance.beltPool[index].entityId);
+                    int entityId = __instance.beltPool[index].entityId;
+                    PipeRuntime.UseObjectLinks(__instance, entityId);
+                    PipeRuntime.Sync(__instance, index);
+                    API.PipeTypes.Changed(__instance.factory, entityId);
                 }
             }
+            PipeMachinePorts.Restore(__instance.factory);
         }
 
         [
@@ -55,6 +65,11 @@ namespace FluidPipes.Integration.Belts
             PipeRuntime.UseObjectLinks(__instance.cargoTraffic, entityId);
             PipeRuntime.Sync(__instance.cargoTraffic, __instance.entityPool[entityId].beltId);
             PipeVisuals.Dirty(__instance, entityId);
+            API.PipeTypes.Changed(__instance, entityId);
+            foreach (int neighbor in PipeRuntime.Bind(__instance.cargoTraffic).Links(entityId))
+            {
+                API.PipeTypes.Changed(__instance, neighbor);
+            }
         }
 
         [HarmonyPrefix, HarmonyPatch(typeof(CargoTraffic), nameof(CargoTraffic.ConnectToSplitter))]
@@ -84,16 +99,44 @@ namespace FluidPipes.Integration.Belts
             HarmonyPatch(typeof(PlanetFactory), nameof(PlanetFactory.UpgradeEntityWithComponents))
         ]
         public static bool Upgrade(PlanetFactory __instance, int entityId, ItemProto newProto) =>
-            (__instance.entityPool[entityId].protoId == Prototypes.ItemId)
-            == (newProto.ID == Prototypes.ItemId);
+            CanUpgrade(__instance.entityPool[entityId].protoId, newProto.ID);
+
+        [
+            HarmonyPostfix,
+            HarmonyPatch(typeof(PlanetFactory), nameof(PlanetFactory.UpgradeEntityWithComponents))
+        ]
+        public static void Upgraded(PlanetFactory __instance, int entityId, ItemProto newProto)
+        {
+            if (
+                PipeRuntime.IsPipeObject(__instance, entityId)
+                && __instance.entityPool[entityId].protoId == newProto.ID
+            )
+            {
+                PipeVisuals.Dirty(__instance, entityId);
+                // Center-height changes can alter a neighbor's fitting ownership at its other end.
+                foreach (int neighbor in API.PipeTypes.GetNeighbors(__instance, entityId))
+                {
+                    PipeVisuals.Dirty(__instance, neighbor);
+                }
+                API.PipeTypes.Changed(__instance, entityId);
+            }
+        }
 
         [
             HarmonyPrefix,
             HarmonyPatch(typeof(PlanetFactory), nameof(PlanetFactory.UpgradePrebuildWithComponents))
         ]
         public static bool UpgradePrebuild(PlanetFactory __instance, int id, ItemProto newProto) =>
-            (__instance.prebuildPool[id].protoId == Prototypes.ItemId)
-            == (newProto.ID == Prototypes.ItemId);
+            CanUpgrade(__instance.prebuildPool[id].protoId, newProto.ID);
+
+        private static bool CanUpgrade(int originalPrototypeId, int replacementPrototypeId)
+        {
+            bool originalIsPipe = PipeTypeRegistry.IsItem(originalPrototypeId);
+            bool replacementIsPipe = PipeTypeRegistry.IsItem(replacementPrototypeId);
+            return originalIsPipe && replacementIsPipe
+                ? PipeTypeRegistry.Compatible(originalPrototypeId, replacementPrototypeId)
+                : originalIsPipe == replacementIsPipe;
+        }
 
         [
             HarmonyPrefix,
@@ -133,7 +176,10 @@ namespace FluidPipes.Integration.Belts
             Filter(__instance, entity, ref input0Id);
             Filter(__instance, entity, ref input1Id);
             Filter(__instance, entity, ref input2Id);
-            if (PipeRuntime.IsPipe(__instance, beltId))
+            if (
+                PipeRuntime.IsPipe(__instance, beltId)
+                && PipeRuntime.HasInventory(__instance.factory, entity)
+            )
             {
                 var graph = PipeRuntime.Bind(__instance);
                 int fluid = graph.View(entity).Item;
@@ -188,16 +234,22 @@ namespace FluidPipes.Integration.Belts
         public static void Connections(CargoTraffic __instance, int beltId)
         {
             PipeRuntime.Sync(__instance, beltId);
+            if (PipeRuntime.IsPipe(__instance, beltId))
+            {
+                int entityId = __instance.beltPool[beltId].entityId;
+                PipeVisuals.Dirty(__instance.factory, entityId);
+                API.PipeTypes.Changed(__instance.factory, entityId);
+            }
         }
 
         [
             HarmonyPrefix,
             HarmonyPatch(typeof(CargoTraffic), nameof(CargoTraffic.RemoveBeltComponent))
         ]
-        public static void Remove(CargoTraffic __instance, int id, out int __state)
+        public static void Remove(CargoTraffic __instance, int id, out RemovalState __state)
         {
-            __state = PipeRuntime.IsPipe(__instance, id) ? __instance.beltPool[id].entityId : 0;
-            if (__state == 0)
+            __state = null;
+            if (!PipeRuntime.IsPipe(__instance, id))
             {
                 return;
             }
@@ -207,6 +259,30 @@ namespace FluidPipes.Integration.Belts
                 removals = new HashSet<Tuple<CargoTraffic, int>>();
             }
 
+            int entityId = __instance.beltPool[id].entityId;
+            var neighbors = new HashSet<int>(PipeRuntime.Bind(__instance).Links(entityId));
+            foreach (int neighbor in PipeTopology.Neighbors(__instance.factory, entityId))
+            {
+                neighbors.Add(neighbor);
+            }
+            for (int slot = 0; slot < 4; slot++)
+            {
+                if (
+                    PipeConnections.TryReadNativeLink(
+                        __instance.factory,
+                        entityId,
+                        slot,
+                        out _,
+                        out int neighbor
+                    )
+                )
+                {
+                    neighbors.Add(neighbor);
+                }
+            }
+            var detachedNeighbors = new int[neighbors.Count];
+            neighbors.CopyTo(detachedNeighbors);
+            __state = new RemovalState { EntityId = entityId, Neighbors = detachedNeighbors };
             removals.Add(Tuple.Create(__instance, id));
         }
 
@@ -226,20 +302,29 @@ namespace FluidPipes.Integration.Belts
             HarmonyPostfix,
             HarmonyPatch(typeof(CargoTraffic), nameof(CargoTraffic.RemoveBeltComponent))
         ]
-        public static void Removed(CargoTraffic __instance, int __state)
+        public static void Removed(CargoTraffic __instance, RemovalState __state)
         {
-            if (__state > 0)
+            if (__state == null)
             {
-                var peers = PipeTopology.Remove(__instance.factory, __state);
-                PipeRuntime.Return(
-                    GameMain.mainPlayer,
-                    __state,
-                    PipeRuntime.Bind(__instance).Remove(__state)
-                );
-                PipeVisuals.Dirty(__instance.factory, __state);
-                foreach (int other in peers)
+                return;
+            }
+
+            int entityId = __state.EntityId;
+            PipeTopology.Remove(__instance.factory, entityId);
+            PipeRuntime.Return(
+                GameMain.mainPlayer,
+                entityId,
+                PipeRuntime.Bind(__instance).Remove(entityId)
+            );
+            PipeVisuals.Dirty(__instance.factory, entityId);
+            API.PipeTypes.Changed(__instance.factory, entityId);
+            foreach (int neighbor in __state.Neighbors)
+            {
+                if (neighbor > 0 && PipeRuntime.IsPipeObject(__instance.factory, neighbor))
                 {
-                    PipeVisuals.Dirty(__instance.factory, other);
+                    PipeRuntime.Sync(__instance, __instance.factory.entityPool[neighbor].beltId);
+                    PipeVisuals.Dirty(__instance.factory, neighbor);
+                    API.PipeTypes.Changed(__instance.factory, neighbor);
                 }
             }
         }
@@ -253,11 +338,19 @@ namespace FluidPipes.Integration.Belts
             bool compatible =
                 !PipeRuntime.IsPipeObject(__instance.factory, __instance.startObjectId)
                 || !PipeRuntime.IsPipeObject(__instance.factory, __instance.castObjectId)
-                || PipeTopology.Compatible(
+                || PipeRuntime.CanLink(
                     __instance.factory,
                     __instance.startObjectId,
                     __instance.castObjectId
-                );
+                )
+                    && (
+                        !PipeTypeRegistry.IsInventory(__instance.handItem?.ID)
+                        || PipeTopology.Compatible(
+                            __instance.factory,
+                            __instance.startObjectId,
+                            __instance.castObjectId
+                        )
+                    );
             foreach (var preview in __instance.buildPreviews)
             {
                 bool valid =
@@ -277,7 +370,7 @@ namespace FluidPipes.Integration.Belts
                         entityId > 0
                             ? __instance.factory.entityPool[entityId].protoId
                             : __instance.factory.prebuildPool[-entityId].protoId;
-                    valid &= (proto == Prototypes.ItemId) == (preview.item.ID == Prototypes.ItemId);
+                    valid &= CanUpgrade(proto, preview.item.ID);
                 }
                 if (!valid)
                 {
@@ -289,34 +382,10 @@ namespace FluidPipes.Integration.Belts
 
         private static bool PreviewLink(PlanetFactory factory, BuildPreview preview, int other)
         {
-            int proto =
-                other > 0
-                    ? factory.entityPool[other].protoId
-                    : factory.prebuildPool[-other].protoId;
-            if (proto == Prototypes.ValveId || preview.item.ID == Prototypes.ValveId)
-            {
-                return proto == Prototypes.ItemId || preview.item.ID == Prototypes.ItemId;
-            }
-
-            if (preview.item.ID != Prototypes.ItemId && proto != Prototypes.ItemId)
-            {
-                return true;
-            }
-
-            if (preview.item.ID == Prototypes.ItemId && proto == Prototypes.ItemId)
-            {
-                return true;
-            }
-
-            var desc = LDB
-                .items.Select(preview.item.ID == Prototypes.ItemId ? proto : preview.item.ID)
-                ?.prefabDesc;
-            return desc != null
-                && !desc.isBelt
-                && !desc.isSplitter
-                && !desc.isPiler
-                && !desc.isSpraycoster
-                && !desc.isMonitor;
+            return PipeRuntime.CanLinkPrototypes(
+                preview.item.ID,
+                PipeRuntime.ObjectPrototype(factory, other)
+            );
         }
     }
 }

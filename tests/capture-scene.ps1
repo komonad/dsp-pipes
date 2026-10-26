@@ -42,7 +42,7 @@ try {
         elseif ($Connections) { $_.Name -like 'ingame-connections-*' }
         else { $_.Name -in @('ingame-comparison-overview.png','ingame-comparison-straight-elbow.png','ingame-comparison-junction-riser.png','ingame-pipe-junction-closeup.png','ingame-belt-junction-closeup.png','ingame-tank-pipe-materials.png','ingame-filled-pipe.png','ingame-empty-pipe.png','ingame-single-nodes.png') }
     })
-    $expected = if($ParallelLine){7}elseif($MinimalLine){4}elseif($Inserters){8}elseif($Gameplay){3}elseif ($Structures) { 5 } elseif ($Cube) { 7 } elseif ($Connections) { 2 } else { 9 }
+    $expected = if($ParallelLine){7}elseif($MinimalLine){4}elseif($Inserters){10}elseif($Gameplay){3}elseif ($Structures) { 5 } elseif ($Cube) { 7 } elseif ($Connections) { 2 } else { 9 }
     if ($pictures.Count -lt $expected -or @($pictures | Where-Object { $_.LastWriteTimeUtc -lt $captureStart }).Count -gt 0) { throw "Scene capture did not produce $expected fresh images." }
     $destination = Join-Path $project 'screenshots/ingame'
     New-Item -ItemType Directory -Path $destination -Force | Out-Null

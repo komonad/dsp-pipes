@@ -37,7 +37,7 @@ namespace FluidPipes.Tests
                 "PASS item admission union, exclusion precedence, ID parsing and snapshot isolation"
             );
             var graph = Chain(3);
-            Check(graph.Insert(1, 1000, 299, 1196), "fill");
+            Check(graph.Insert(1, 1000, 29, 116), "fill");
             Check(
                 !graph.Insert(3, 1001, 1, 0) && !graph.Insert(3, 1000, 2, 0),
                 "type and capacity rejection"
@@ -50,15 +50,15 @@ namespace FluidPipes.Tests
             var left = graph.View(1);
             var right = graph.View(3);
             Check(
-                left.Nodes == 1 && right.Nodes == 1 && left.Count <= 100 && right.Count <= 100,
+                left.Nodes == 1 && right.Nodes == 1 && left.Count <= 10 && right.Count <= 10,
                 "split capacity"
             );
             Check(
-                left.Count + right.Count + removed.Count == 299
+                left.Count + right.Count + removed.Count == 29
                     && left.ProliferatorPoints
                         + right.ProliferatorPoints
                         + removed.ProliferatorPoints
-                        == 1196,
+                        == 116,
                 "remove conservation"
             );
             Check(
@@ -71,6 +71,10 @@ namespace FluidPipes.Tests
             RoundTrip(graph, new[] { 1, 3 });
             report.AppendLine(
                 "PASS capacity, filters, fluid lock, empty reset, split/merge, proliferation, serialization"
+            );
+            HistoricalCapacity();
+            report.AppendLine(
+                "PASS historical capacity stock, withdrawal, split and reload conservation"
             );
             Randomized();
             report.AppendLine(
@@ -361,6 +365,62 @@ namespace FluidPipes.Tests
                 }
                 if (step % 1000 == 0)
                     RoundTrip(graph, nodes.Keys.ToArray());
+            }
+        }
+
+        private static void HistoricalCapacity()
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream, Encoding.UTF8, true))
+            {
+                writer.Write(1);
+                writer.Write(2);
+                writer.Write(1);
+                writer.Write(1);
+                writer.Write(2);
+                writer.Write(2);
+                writer.Write(0);
+                writer.Write(1);
+                writer.Write(1);
+                writer.Write(1000);
+                writer.Write(150L);
+                writer.Write(600L);
+                stream.Position = 0;
+                var graph = PipeGraph.Import(new BinaryReader(stream));
+                Check(
+                    graph.View(1).Capacity == 20 && graph.View(1).Count == 150,
+                    "historical stock preservation"
+                );
+                Check(!graph.Insert(1, 1000, 1, 4), "surplus storage admission");
+                bool increaseRejected = false;
+                try
+                {
+                    graph.SetInventory(1, 1000, 151, 604);
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    increaseRejected = true;
+                }
+                Check(increaseRejected, "surplus increases are rejected");
+                graph.SetInventory(1, 1000, 150, 600);
+                RoundTrip(graph, new[] { 1, 2 });
+                graph.Disconnect(1, 2);
+                Check(
+                    graph.View(1).Count + graph.View(2).Count == 150,
+                    "surplus split conservation"
+                );
+                Check(
+                    graph.View(1).ProliferatorPoints + graph.View(2).ProliferatorPoints == 600,
+                    "surplus split points"
+                );
+                Check(graph.Connect(1, 2), "surplus components merge");
+                var taken = graph.Take(1, 131);
+                Check(taken.Count == 131 && taken.ProliferatorPoints == 524, "surplus withdrawal");
+                Check(
+                    graph.Insert(1, 1000, 1, 4) && graph.View(1).Count == 20,
+                    "admission resumes at nominal capacity"
+                );
+                Check(!graph.Insert(1, 1000, 1, 4), "nominal capacity limit");
             }
         }
 

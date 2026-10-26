@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="../../Local.props" Condition="Exists('../../Local.props')" />
+    <PropertyGroup>
+        <TargetFramework>net472</TargetFramework>
+        <LangVersion>7.3</LangVersion>
+        <Version>1.0.1</Version>
+        <AssemblyName>CopperPipes</AssemblyName>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+        <ModPlugins>$(BepInExCore)/../plugins</ModPlugins>
+    </PropertyGroup>
+    <ItemGroup>
+        <EmbeddedResource
+            Include="assets-src/copper-pipe.png"
+            LogicalName="CopperPipes.Assets.CopperPipe.png"
+        />
+        <ProjectReference
+            Include="../../FluidPipes.csproj"
+            Private="false"
+            Condition="'$(FluidPipesAssemblyPath)' == ''"
+        />
+        <Reference
+            Include="FluidPipes"
+            HintPath="$(FluidPipesAssemblyPath)"
+            Private="false"
+            Condition="'$(FluidPipesAssemblyPath)' != ''"
+        />
+        <Reference
+            Include="Assembly-CSharp"
+            HintPath="$(Managed)/Assembly-CSharp.dll"
+            Private="false"
+        />
+        <Reference Include="BepInEx" HintPath="$(BepInExCore)/BepInEx.dll" Private="false" />
+        <Reference
+            Include="CommonAPI"
+            HintPath="$(ModPlugins)/CommonAPI-CommonAPI/CommonAPI.dll"
+            Private="false"
+        />
+        <Reference
+            Include="LDBTool"
+            HintPath="$(ModPlugins)/xiaoye97-LDBTool/LDBTool.dll"
+            Private="false"
+        />
+        <Reference Include="UnityEngine" HintPath="$(Managed)/UnityEngine.dll" Private="false" />
+        <Reference
+            Include="UnityEngine.CoreModule"
+            HintPath="$(Managed)/UnityEngine.CoreModule.dll"
+            Private="false"
+        />
+        <Reference
+            Include="UnityEngine.ImageConversionModule"
+            HintPath="$(Managed)/UnityEngine.ImageConversionModule.dll"
+            Private="false"
+        />
+    </ItemGroup>
+</Project>

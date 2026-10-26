@@ -43,6 +43,7 @@ namespace FluidPipes.Integration.Reservoirs
         {
             PipePools.Tick(__instance.factory);
             PipeValves.Tick(__instance.factory);
+            PipeMachinePorts.Tick(__instance.factory);
         }
 
         [

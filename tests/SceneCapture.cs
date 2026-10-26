@@ -24,6 +24,8 @@ public sealed partial class SceneCapture : BaseUnityPlugin
     private Vector3 center;
     private Vector3 cameraPosition;
     private Vector3 cameraTarget;
+    private Vector3? cameraUp;
+    private bool orthographicCapture;
     private RenderTexture target;
     private int pipes;
     private int belts;
@@ -37,12 +39,17 @@ public sealed partial class SceneCapture : BaseUnityPlugin
     private bool insertersOnly;
     private bool minimalLineOnly;
     private bool parallelLineOnly;
+    private bool machinePortsOnly;
+    private bool copperInteractionsOnly;
+    private bool builtInContentDisabled;
     private bool fixtureSave;
     private string inspectSave;
     private readonly List<int> galleryNodes = new List<int>();
 
     private void Awake()
     {
+        AudioListener.volume = 0;
+        AudioListener.pause = true;
         instance = this;
         output = System.IO.Path.Combine(
             System.IO.Path.GetDirectoryName(Info.Location),
@@ -56,6 +63,12 @@ public sealed partial class SceneCapture : BaseUnityPlugin
         minimalLineOnly = Environment.GetEnvironmentVariable("FluidPipesCapture") == "minimal-line";
         parallelLineOnly =
             Environment.GetEnvironmentVariable("FluidPipesCapture") == "parallel-line";
+        machinePortsOnly =
+            Environment.GetEnvironmentVariable("FluidPipesCapture") == "machine-ports";
+        copperInteractionsOnly =
+            Environment.GetEnvironmentVariable("FluidPipesCapture") == "copper-interactions";
+        builtInContentDisabled =
+            Environment.GetEnvironmentVariable("FluidPipesBuiltInContent") == "0";
         inspectSave = Environment.GetEnvironmentVariable("FluidPipesInspectSave");
         Directory.CreateDirectory(output);
         new Harmony("local.fluidpipes.scene").PatchAll(typeof(SceneCapture));
@@ -107,7 +120,7 @@ public sealed partial class SceneCapture : BaseUnityPlugin
     ]
     private static bool CaptureHover(PlayerAction_Inspect __instance)
     {
-        if (instance == null || !instance.parallelLineOnly)
+        if (instance == null || !(instance.parallelLineOnly || instance.machinePortsOnly))
             return true;
         __instance.hoveringEntityId = __instance.hoveringPrebuildId = 0;
         return false;
@@ -116,6 +129,15 @@ public sealed partial class SceneCapture : BaseUnityPlugin
     [HarmonyPostfix, HarmonyPatch(typeof(VFPreload), "Update")]
     private static void Preload(VFPreload __instance)
     {
+        if (
+            instance != null
+            && (instance.machinePortsOnly || instance.copperInteractionsOnly)
+            && __instance.languageSelectGroup.gameObject.activeSelf
+        )
+        {
+            __instance.SelectLanguageZHCN();
+            __instance.languageSelectGroup.gameObject.SetActive(false);
+        }
         __instance.time = __instance.splashTime + 1;
         __instance.musicReached = true;
         __instance.clicked = true;
@@ -129,8 +151,16 @@ public sealed partial class SceneCapture : BaseUnityPlugin
         var camera = GameCamera.main;
         camera.transform.SetPositionAndRotation(
             instance.cameraPosition,
-            Quaternion.LookRotation(instance.cameraTarget - instance.cameraPosition, instance.up)
+            Quaternion.LookRotation(
+                instance.cameraTarget - instance.cameraPosition,
+                instance.cameraUp ?? instance.up
+            )
         );
+        camera.orthographic = instance.orthographicCapture;
+        if (instance.orthographicCapture)
+        {
+            camera.orthographicSize = 1.5f;
+        }
         camera.fieldOfView = 42;
         camera.aspect = 16f / 9;
         camera.targetTexture = instance.target;
@@ -138,6 +168,8 @@ public sealed partial class SceneCapture : BaseUnityPlugin
 
     private void Update()
     {
+        AudioListener.volume = 0;
+        AudioListener.pause = true;
         if (!started && VFPreload.done && Prototypes.Ready && UIRoot.instance != null)
         {
             started = true;
@@ -167,7 +199,12 @@ public sealed partial class SceneCapture : BaseUnityPlugin
             {
                 try
                 {
-                    if (parallelLineOnly)
+                    if (machinePortsOnly)
+                    {
+                        RestoreMachinePortScene();
+                        StartCoroutine(Guard(Capture()));
+                    }
+                    else if (parallelLineOnly)
                     {
                         RestoreParallelFluidLine();
                         StartCoroutine(Guard(Capture()));
@@ -481,6 +518,10 @@ public sealed partial class SceneCapture : BaseUnityPlugin
         for (int index = 0; index < 1000; index++)
         {
             float y = 1 - 2f * (index + 0.5f) / 1000;
+            if (copperInteractionsOnly && Mathf.Abs(y) > 0.8f)
+            {
+                continue;
+            }
             float angle = index * 2.399963f;
             var normal2 = new Vector3(
                 Mathf.Sqrt(1 - y * y) * Mathf.Cos(angle),
@@ -520,6 +561,8 @@ public sealed partial class SceneCapture : BaseUnityPlugin
         east = Vector3.Cross(up, Vector3.up).normalized;
         north = Vector3.Cross(east, up).normalized;
         center = up * (planet.realRadius + 0.2f);
+        factory.PlanetReformAll(1, 0, true);
+        report.Add("PASS The scene planet has native foundation across its surface.");
         factory.FlattenTerrain(
             center,
             Quaternion.LookRotation(north, up),
@@ -549,6 +592,17 @@ public sealed partial class SceneCapture : BaseUnityPlugin
         if (connectionsOnly)
         {
             CreateConnections();
+            return;
+        }
+        if (copperInteractionsOnly)
+        {
+            PrepareCopperInteractions();
+            return;
+        }
+        if (machinePortsOnly)
+        {
+            DumpNativeUi();
+            CreateMachinePortScene();
             return;
         }
         if (cubeOnly)
@@ -735,7 +789,7 @@ public sealed partial class SceneCapture : BaseUnityPlugin
                 Connect(bridge[4], right, 2);
                 materialEntity = ring[0];
                 var graph = PipeRuntime.Bind(factory.cargoTraffic);
-                graph.Insert(ring[0], 1000, 1000, 0);
+                graph.Insert(ring[0], 1000, graph.View(ring[0]).Nodes * 4, 0);
                 if (graph.View(ring[0]).Nodes != 25)
                     throw new InvalidOperationException("Theta network is disconnected.");
             }
@@ -822,7 +876,7 @@ public sealed partial class SceneCapture : BaseUnityPlugin
                 edges++;
             }
         var graph = PipeRuntime.Bind(factory.cargoTraffic);
-        int count = nodes.Count * 40;
+        int count = nodes.Count * 4;
         graph.Insert(galleryNodes[0], 1000, count, 0);
         foreach (int node in galleryNodes)
             if (graph.View(node).Nodes != 32 || graph.View(node).Count != count)
@@ -907,7 +961,7 @@ public sealed partial class SceneCapture : BaseUnityPlugin
             Connect(node, arm[0], 1);
         }
         var graph = PipeRuntime.Bind(factory.cargoTraffic);
-        graph.Insert(node, 1000, graph.View(node).Nodes * 40, 0);
+        graph.Insert(node, 1000, graph.View(node).Nodes * 4, 0);
     }
 
     private void Tank(float x, float z, int fluid)
@@ -1022,7 +1076,7 @@ public sealed partial class SceneCapture : BaseUnityPlugin
                 Connect(ids[index - 1], ids[index], 1);
         }
         if (fluid > 0)
-            PipeRuntime.Bind(factory.cargoTraffic).Insert(ids[0], fluid, points.Length * 40, 0);
+            PipeRuntime.Bind(factory.cargoTraffic).Insert(ids[0], fluid, points.Length * 4, 0);
         return ids;
     }
 
@@ -1058,6 +1112,8 @@ public sealed partial class SceneCapture : BaseUnityPlugin
         float targetHeight = 0.5f
     )
     {
+        orthographicCapture = false;
+        cameraUp = null;
         cameraTarget = Point(x, z, targetHeight);
         cameraPosition = cameraTarget + up * height - north * back + east * side;
     }
@@ -1423,6 +1479,26 @@ public sealed partial class SceneCapture : BaseUnityPlugin
     {
         for (int frame = 0; frame < 150; frame++)
             yield return null;
+        if (copperInteractionsOnly)
+        {
+            var capture = CaptureCopperInteractions();
+            while (capture.MoveNext())
+            {
+                yield return capture.Current;
+            }
+            Finish(null);
+            yield break;
+        }
+        if (machinePortsOnly)
+        {
+            var capture = CaptureMachinePorts();
+            while (capture.MoveNext())
+            {
+                yield return capture.Current;
+            }
+            Finish(null);
+            yield break;
+        }
         if (parallelLineOnly)
         {
             var capture = CaptureParallelFluidLine();
@@ -1516,15 +1592,15 @@ public sealed partial class SceneCapture : BaseUnityPlugin
             for (int frame = 0; frame < 12; frame++)
                 yield return null;
             SaveImage("ingame-cube-cut.png");
-            cubeGraph.Insert(cutA, 1000, 1280, 0);
+            cubeGraph.Insert(cutA, 1000, 128, 0);
             var remaining = PipeTopology.Neighbors(factory, cutA);
             foreach (int peer in remaining)
                 PipeConnections.Disconnect(factory, cutA, peer);
             if (
                 cubeGraph.View(cutA).Nodes != 1
-                || cubeGraph.View(cutA).Count != 40
+                || cubeGraph.View(cutA).Count != 4
                 || cubeGraph.View(cutB).Nodes != 31
-                || cubeGraph.View(cutB).Count != 1240
+                || cubeGraph.View(cutB).Count != 124
             )
                 throw new InvalidOperationException(
                     "Cube corner isolation does not conserve inventory."
@@ -1532,10 +1608,10 @@ public sealed partial class SceneCapture : BaseUnityPlugin
             PipeConnections.Connect(factory, cutA, cutB, 0, 1);
             foreach (int peer in remaining)
                 PipeConnections.Connect(factory, cutA, peer, 0, 1);
-            if (cubeGraph.View(cutA).Nodes != 32 || cubeGraph.View(cutA).Count != 1280)
+            if (cubeGraph.View(cutA).Nodes != 32 || cubeGraph.View(cutA).Count != 128)
                 throw new InvalidOperationException("Cube reconnection loses inventory.");
             report.Add(
-                "Live edge cuts preserve alternate routes; corner isolation retains 32 entities and splits 1280 water into 40+1240, then reconnects without loss."
+                "Live edge cuts preserve alternate routes; corner isolation retains 32 entities and splits 128 water into 4+124, then reconnects without loss."
             );
             Finish(null);
             yield break;
@@ -1694,8 +1770,13 @@ public sealed partial class SceneCapture : BaseUnityPlugin
         File.WriteAllLines(
             System.IO.Path.Combine(
                 output,
-                !string.IsNullOrEmpty(inspectSave) && !minimalLineOnly && !parallelLineOnly
+                !string.IsNullOrEmpty(inspectSave)
+                    && !minimalLineOnly
+                    && !parallelLineOnly
+                    && !machinePortsOnly
                         ? "inspect-results.txt"
+                    : machinePortsOnly ? "machine-ports-results.txt"
+                    : copperInteractionsOnly ? "copper-interactions-results.txt"
                     : parallelLineOnly ? "parallel-line-results.txt"
                     : minimalLineOnly ? "minimal-line-results.txt"
                     : insertersOnly ? "inserters-results.txt"
