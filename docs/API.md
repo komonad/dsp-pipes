@@ -1,4 +1,4 @@
-# Fluid Pipes API v1
+# Fluid Pipes API v1 接口文档
 
 Fluid Pipes 同时提供管道建筑和供其它 BepInEx mod 使用的共享库存 API。安装插件及基础依赖后，即可使用管道和阀门的建造、运输、渲染与交互功能。外部集成通过 `FluidPipes.API` 命名空间访问同一套运行逻辑，实现类型使用 `internal` 可见性。
 
@@ -112,7 +112,7 @@ if (PipeApi.TryGetInventory(factory, pipeEntityId, out var inventory))
 
 if (PipeApi.TryInsert(factory, pipeEntityId, 1000, 4, 16))
 {
-    // Insertion owns four items and sixteen total proliferator points.
+    // 插入后归属四个物品与十六点增产点。
 }
 
 if (PipeApi.TryTake(factory, pipeEntityId, 4, out var taken, filterItemId: 1000))

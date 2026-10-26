@@ -1,4 +1,4 @@
-# Copper Pipes
+# 铜管扩展（Copper Pipes）
 
 Copper Pipes 是依赖 FluidPipes 0.8.0 的独立扩展 Mod。它添加铜管物品、制造配方和铜色金属外观，管壁与接头使用相同材质参数。FluidPipes 的默认玻璃管作为独立物品提供；铜管的原型注册独立于内置玻璃管和阀门。
 
