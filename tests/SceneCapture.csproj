@@ -18,6 +18,8 @@
         <Compile Include="CopperInteractionScene.cs" />
         <Compile Include="CopperIconChecks.cs" />
         <Compile Include="DisabledContentScene.cs" />
+        <Compile Include="WindowPipePreview.cs" />
+        <Compile Include="PowerBuildingReference.cs" />
         <ProjectReference Include="../FluidPipes.csproj" />
         <Reference
             Include="UnityEngine.AudioModule"

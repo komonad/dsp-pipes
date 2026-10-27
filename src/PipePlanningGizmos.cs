@@ -36,6 +36,9 @@ namespace FluidPipes
 
         [ThreadStatic]
         private static bool registeredPipePrebuild;
+
+        [ThreadStatic]
+        private static bool structurePrebuild;
         private static Mesh mesh;
         private static Material material;
 
@@ -84,6 +87,7 @@ namespace FluidPipes
 
             pipePrebuild = false;
             registeredPipePrebuild = false;
+            structurePrebuild = false;
         }
 
         [
@@ -187,13 +191,15 @@ namespace FluidPipes
         public static ItemProto Select(ProtoSet<ItemProto> set, int itemId)
         {
             pipePrebuild = PipeTypeRegistry.IsUndirected(itemId);
-            registeredPipePrebuild = PipeTypeRegistry.IsItem(itemId);
+            registeredPipePrebuild = PipeTypeRegistry.UsesPipeConstruction(itemId);
+            structurePrebuild =
+                PipeTypeRegistry.Get(itemId)?.Definition.Behavior == API.PipeBehavior.Structure;
             return set.Select(itemId);
         }
 
         public static void AddPoint(List<ConnGizmoObj> native, ConnGizmoObj item)
         {
-            if (registeredPipePrebuild)
+            if (registeredPipePrebuild && !structurePrebuild)
             {
                 item.rot = Maths.SphericalRotation(item.pos, 0);
             }

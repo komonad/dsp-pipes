@@ -1,0 +1,55 @@
+LOADED OrbitalRing=1.0.20 FluidPipes=0.10.4
+PROTOTYPES pipe=9460 valve=9461
+SCENE ring item=6515 band=1 hemisphere=1 nodes=1000
+SCENE ring item=6515 band=2 hemisphere=1 nodes=1000
+SCENE ring item=6515 band=1 hemisphere=-1 nodes=1000
+SCENE ring item=6515 band=2 hemisphere=-1 nodes=1000
+SCENE ring item=6516 band=1 hemisphere=1 nodes=1000
+SCENE ring item=6516 band=1 hemisphere=-1 nodes=1000
+SCENE ring item=6517 band=2 hemisphere=1 nodes=1000
+RENDER_MODE pipe-models
+SCENE complete orbital rings on full foundation; audio muted
+PASS single-component construction orientation item=6515
+PASS single-component construction orientation item=6517
+PASS single-component construction orientation item=6516
+REPAIR item=6515 valid=True previews=1 conditions=Ok endpoints=0,0
+REPAIR_PREVIEW item=6515 pos_error=0 input=0 output=0 tangent=0.9999999
+PASS native dismantle/rebuild item=6515
+REPAIR item=6517 valid=True previews=1 conditions=Ok endpoints=0,0
+REPAIR_PREVIEW item=6517 pos_error=0 input=0 output=0 tangent=1
+PASS native dismantle/rebuild item=6517
+REPAIR item=6516 valid=True previews=1 conditions=Ok endpoints=0,0
+REPAIR_PREVIEW item=6516 pos_error=0 input=0 output=0 tangent=1
+PASS native dismantle/rebuild item=6516
+STRUCTURE_PREWARM frames=828 elapsed_ms=3974.3
+PASS complete-ring braces active_pairs=3
+FIRST_VIEW view=near submit_ms=6.943
+RENDER_PROFILE view=near item=-1 chunks=0 triangles=0 draw_calls=0 submit_ms=0.004 render_fence_ms=2.170 frame_ms=7.826 frame_p95_ms=8.760 rebuilds=0
+RENDER_PROFILE view=near item=6515 chunks=6 triangles=70528 draw_calls=18 submit_ms=0.339 render_fence_ms=2.021 frame_ms=5.005 frame_p95_ms=8.607 rebuilds=0
+RENDER_PROFILE view=near item=6517 chunks=2 triangles=19968 draw_calls=6 submit_ms=0.158 render_fence_ms=2.030 frame_ms=4.255 frame_p95_ms=5.007 rebuilds=0
+RENDER_PROFILE view=near item=6516 chunks=3 triangles=51320 draw_calls=15 submit_ms=0.206 render_fence_ms=1.981 frame_ms=4.233 frame_p95_ms=4.868 rebuilds=0
+RENDER_PROFILE view=near item=0 chunks=11 triangles=141816 draw_calls=39 submit_ms=0.552 render_fence_ms=2.292 frame_ms=5.058 frame_p95_ms=5.585 rebuilds=0
+SHADOW_PROFILE view=near triangles=1274112
+CAPTURE D:\dsp-dev\FluidPipes\obj\orbitalring-checks\20261027-011520\BepInEx\plugins\orbital-profile-near.png
+FIRST_VIEW view=far submit_ms=1.454
+RENDER_PROFILE view=far item=-1 chunks=0 triangles=0 draw_calls=0 submit_ms=0.004 render_fence_ms=2.170 frame_ms=4.662 frame_p95_ms=5.929 rebuilds=0
+RENDER_PROFILE view=far item=6515 chunks=52 triangles=183712 draw_calls=152 submit_ms=0.605 render_fence_ms=2.208 frame_ms=5.252 frame_p95_ms=5.802 rebuilds=0
+RENDER_PROFILE view=far item=6517 chunks=15 triangles=66352 draw_calls=45 submit_ms=0.244 render_fence_ms=2.190 frame_ms=4.629 frame_p95_ms=5.689 rebuilds=0
+RENDER_PROFILE view=far item=6516 chunks=29 triangles=155008 draw_calls=132 submit_ms=0.419 render_fence_ms=2.130 frame_ms=4.636 frame_p95_ms=5.696 rebuilds=0
+RENDER_PROFILE view=far item=0 chunks=96 triangles=405072 draw_calls=329 submit_ms=1.052 render_fence_ms=2.198 frame_ms=5.327 frame_p95_ms=5.965 rebuilds=0
+SHADOW_PROFILE view=far triangles=1274112
+CAPTURE D:\dsp-dev\FluidPipes\obj\orbitalring-checks\20261027-011520\BepInEx\plugins\orbital-profile-far.png
+FIRST_VIEW view=planet submit_ms=1.273
+RENDER_PROFILE view=planet item=-1 chunks=0 triangles=0 draw_calls=0 submit_ms=0.003 render_fence_ms=2.118 frame_ms=4.469 frame_p95_ms=5.844 rebuilds=0
+RENDER_PROFILE view=planet item=6515 chunks=69 triangles=666192 draw_calls=207 submit_ms=0.688 render_fence_ms=2.314 frame_ms=5.483 frame_p95_ms=6.552 rebuilds=0
+RENDER_PROFILE view=planet item=6517 chunks=17 triangles=172608 draw_calls=51 submit_ms=0.231 render_fence_ms=2.046 frame_ms=4.687 frame_p95_ms=5.506 rebuilds=0
+RENDER_PROFILE view=planet item=6516 chunks=34 triangles=423616 draw_calls=166 submit_ms=0.447 render_fence_ms=1.961 frame_ms=4.630 frame_p95_ms=5.463 rebuilds=0
+RENDER_PROFILE view=planet item=0 chunks=120 triangles=1262416 draw_calls=424 submit_ms=1.140 render_fence_ms=2.324 frame_ms=5.722 frame_p95_ms=6.582 rebuilds=0
+SHADOW_PROFILE view=planet triangles=1274112
+CAPTURE D:\dsp-dev\FluidPipes\obj\orbitalring-checks\20261027-011520\BepInEx\plugins\orbital-profile-planet.png
+CAPTURE D:\dsp-dev\FluidPipes\obj\orbitalring-checks\20261027-011520\BepInEx\plugins\orbital-profile-braces.png
+PASS distant mesh cache invalidation on cut/reconnect
+MESH_PROFILE item=6515 meshes=265 vertices=743255 triangles=991912
+MESH_PROFILE item=6517 meshes=72 vertices=198465 triangles=329728
+MESH_PROFILE item=6516 meshes=292 vertices=918532 triangles=761584
+Completed=1

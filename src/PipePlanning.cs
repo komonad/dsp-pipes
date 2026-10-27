@@ -28,7 +28,7 @@ namespace FluidPipes
             geometry = PipeTypeRegistry.Geometry(tool.handItem?.ID);
             var defaults = PipeGeometryProfile.Default;
             return mask == BuildingCollisionMask
-                && PipeTypeRegistry.IsItem(tool.handItem?.ID)
+                && PipeTypeRegistry.UsesPipeConstruction(tool.handItem?.ID)
                 && (
                     geometry.Radius != defaults.Radius
                     || geometry.CenterHeight != defaults.CenterHeight

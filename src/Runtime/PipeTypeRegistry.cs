@@ -96,6 +96,14 @@ namespace FluidPipes
 
         internal static bool IsItem(int? itemId) => itemId.HasValue && IsItem(itemId.Value);
 
+        internal static bool UsesPipeConstruction(int? itemId) =>
+            itemId.HasValue
+            && Get(itemId.Value)?.Definition.ConstructionMode == PipeConstructionMode.Pipe;
+
+        internal static bool UsesNativeConstruction(int? itemId) =>
+            itemId.HasValue
+            && Get(itemId.Value)?.Definition.ConstructionMode == PipeConstructionMode.NativeBelt;
+
         internal static PipeGeometryProfile Geometry(int? itemId) =>
             (itemId.HasValue ? Get(itemId.Value)?.Definition.Geometry : null)
             ?? PipeGeometryProfile.Default;

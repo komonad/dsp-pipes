@@ -26,6 +26,49 @@ namespace FluidPipes.API
         /// <summary>供渲染与连接几何使用的不可变世界空间尺寸。</summary>
         public PipeGeometryProfile Geometry { get; }
 
+        /// <summary>规划与碰撞行为的提供方。</summary>
+        public PipeConstructionMode ConstructionMode { get; }
+
+        /// <summary>返回采用指定建造规则的不可变类型副本。</summary>
+        /// <param name="mode">管道专用规则，或原生传送带规则。</param>
+        /// <returns>保留原型、模拟、几何与渲染设置的类型副本。</returns>
+        /// <exception cref="ArgumentOutOfRangeException">建造模式无效。</exception>
+        /// <exception cref="ArgumentException">原生传送带模式要求有向结构类型。</exception>
+        public PipeTypeDefinition WithConstructionMode(PipeConstructionMode mode)
+        {
+            if (!Enum.IsDefined(typeof(PipeConstructionMode), mode))
+            {
+                throw new ArgumentOutOfRangeException(nameof(mode));
+            }
+            if (
+                mode == PipeConstructionMode.NativeBelt
+                && (
+                    Behavior != PipeBehavior.Structure
+                    || DirectionMode != PipeDirectionMode.Directed
+                )
+            )
+            {
+                throw new ArgumentException(
+                    "Native belt construction requires a directed structure.",
+                    nameof(mode)
+                );
+            }
+            return new PipeTypeDefinition(this, mode);
+        }
+
+        private PipeTypeDefinition(PipeTypeDefinition source, PipeConstructionMode mode)
+        {
+            LocalName = source.LocalName;
+            Prototype = source.Prototype;
+            Appearance = source.Appearance;
+            Behavior = source.Behavior;
+            ConnectionFamily = source.ConnectionFamily;
+            BatchGroup = source.BatchGroup;
+            DirectionMode = source.DirectionMode;
+            Geometry = source.Geometry;
+            ConstructionMode = mode;
+        }
+
         internal Func<PlanetFactory, int, int> BatchGroup { get; }
 
         /// <summary>通过七参数二进制接口以标准几何定义由物品承载的程序化连接。</summary>
@@ -154,6 +197,18 @@ namespace FluidPipes.API
                         nameof(appearance)
                     );
                 }
+            }
+
+            if (
+                directionMode == PipeDirectionMode.Undirected
+                && appearance?.WallLayout != null
+                && !appearance.WallLayout.IsReversalSymmetric
+            )
+            {
+                throw new ArgumentException(
+                    "Undirected wall bands use centered bands or adjacent mirrored pairs.",
+                    nameof(appearance)
+                );
             }
 
             if (

@@ -1,6 +1,6 @@
 # 铜管扩展（Copper Pipes）
 
-Copper Pipes 是依赖 FluidPipes 0.8.0 的独立扩展 Mod。它添加铜管物品、制造配方和铜色金属外观，管壁与接头使用相同材质参数。FluidPipes 的默认玻璃管作为独立物品提供；铜管的原型注册独立于内置玻璃管和阀门。
+Copper Pipes 是依赖 FluidPipes 0.9.0 的独立扩展 Mod。它添加铜管物品、制造配方和铜色金属外观，管壁顶部采用玻璃观察窗，接头与其余管壳使用铜材质。FluidPipes 的默认玻璃管作为独立物品提供；铜管的原型注册独立于内置玻璃管和阀门。
 
 铜管沿用共享库存与无向连接规则，每段容量 10。铜管与玻璃管可以相互连接，并共享同一物品库存和液位。物品准入策略由 FluidPipes 的配置决定。
 
@@ -14,7 +14,7 @@ Copper Pipes 是依赖 FluidPipes 0.8.0 的独立扩展 Mod。它添加铜管物
 
 ## 安装
 
-安装 FluidPipes 0.8.0 及其依赖后，将 `CopperPipes-1.0.1.zip` 解压到对应游戏或 Mod profile 根目录。扩展文件位于 `BepInEx/plugins/CopperPipes/CopperPipes.dll`。
+安装 FluidPipes 0.9.0 及其依赖后，将 `CopperPipes-1.1.0.zip` 解压到对应游戏或 Mod profile 根目录。扩展文件位于 `BepInEx/plugins/CopperPipes/CopperPipes.dll`。
 
 使用包含铜管建筑或物品的存档时，保持 Copper Pipes 与 FluidPipes 一同安装。LDBTool 管理物品和配方 ID，跨 profile 迁移存档时一并保留原有 LDBTool ID 配置。
 
@@ -35,7 +35,7 @@ dotnet build examples/CopperPipes/CopperPipes.csproj -c Release -p:FluidPipesAss
 
 独立使用此示例目录时，可通过 MSBuild 参数提供 `Managed`（游戏 `DSPGAME_Data/Managed`）、`BepInExCore`（profile 的 `BepInEx/core`）与 `FluidPipesAssemblyPath`。`ModPlugins` 默认位于 `BepInExCore/../plugins`，用于查找 CommonAPI 与 LDBTool。
 
-包输出到 `examples/CopperPipes/dist/CopperPipes-1.0.1.zip`，只包含内嵌图标的 CopperPipes.dll。FluidPipes 作为独立依赖安装。
+包输出到 `examples/CopperPipes/dist/CopperPipes-1.1.0.zip`，只包含内嵌图标的 CopperPipes.dll。FluidPipes 作为独立依赖安装。
 
 ## 扩展示例结构
 
@@ -46,3 +46,9 @@ dotnet build examples/CopperPipes/CopperPipes.csproj -c Release -p:FluidPipesAss
 源码仅引用 `FluidPipes.API`，以独立程序集编译。扩展的材质配置作用于铜管类型拥有的副本。
 
 运行时图标转换为原生图集使用的 80×80 ARGB32 纹理与 FullRect Sprite。纹理保留 CPU 像素供图集读取，Sprite 与纹理由扩展持有至应用退出，以覆盖数据库引用和图集重建。
+
+## 观察窗
+
+水平管的顶部观察窗总角宽为90度。管道仰角从60度到80度时，截面参考方向从径向上方过渡到行星北向，背侧窗口逐渐打开；竖直段形成两条相对的90度窗口。铜壳、端盖和接头保持不透明，内部液体沿用库的物品配色。
+
+外观由公开的 `PipeWallLayout` 和 `PipeWallBand` 配置。玻璃区域使用 `Wall` 材质，铜壳使用 `Fittings` 材质；网格在拓扑变化时生成并缓存。

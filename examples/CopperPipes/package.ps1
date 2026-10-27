@@ -3,7 +3,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$version = '1.0.1'
+$version = '1.1.0'
 $assemblyPath = Join-Path $PSScriptRoot 'bin/Release/CopperPipes.dll'
 if (-not (Test-Path -LiteralPath $assemblyPath -PathType Leaf)) {
     throw 'Build CopperPipes in Release configuration before packaging.'

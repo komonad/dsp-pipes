@@ -1,0 +1,46 @@
+LOADED OrbitalRing=1.0.20 FluidPipes=0.10.3
+PROTOTYPES pipe=9460 valve=9461
+SCENE ring item=6515 band=1 hemisphere=1 nodes=1000
+SCENE ring item=6515 band=2 hemisphere=1 nodes=1000
+SCENE ring item=6515 band=1 hemisphere=-1 nodes=1000
+SCENE ring item=6515 band=2 hemisphere=-1 nodes=1000
+SCENE ring item=6516 band=1 hemisphere=1 nodes=1000
+SCENE ring item=6516 band=1 hemisphere=-1 nodes=1000
+SCENE ring item=6517 band=2 hemisphere=1 nodes=1000
+RENDER_MODE pipe-models
+SCENE complete orbital rings on full foundation; audio muted
+PASS single-component construction orientation item=6515
+PASS single-component construction orientation item=6517
+PASS single-component construction orientation item=6516
+STRUCTURE_PREWARM frames=822 elapsed_ms=3879.8
+PASS complete-ring braces active_pairs=3
+FIRST_VIEW view=near submit_ms=7.106
+RENDER_PROFILE view=near item=-1 chunks=0 triangles=0 draw_calls=0 submit_ms=0.003 render_fence_ms=2.886 frame_ms=8.569 frame_p95_ms=14.526 rebuilds=0
+RENDER_PROFILE view=near item=6515 chunks=6 triangles=70528 draw_calls=18 submit_ms=0.332 render_fence_ms=3.475 frame_ms=5.998 frame_p95_ms=7.180 rebuilds=0
+RENDER_PROFILE view=near item=6517 chunks=2 triangles=19968 draw_calls=6 submit_ms=0.163 render_fence_ms=3.319 frame_ms=5.754 frame_p95_ms=6.867 rebuilds=0
+RENDER_PROFILE view=near item=6516 chunks=3 triangles=51320 draw_calls=15 submit_ms=0.213 render_fence_ms=3.559 frame_ms=5.991 frame_p95_ms=7.860 rebuilds=0
+RENDER_PROFILE view=near item=0 chunks=11 triangles=141816 draw_calls=39 submit_ms=0.506 render_fence_ms=3.272 frame_ms=5.905 frame_p95_ms=6.628 rebuilds=0
+SHADOW_PROFILE view=near triangles=1274112
+CAPTURE D:\dsp-dev\FluidPipes\obj\orbitalring-checks\20261027-001121\BepInEx\plugins\orbital-profile-near.png
+FIRST_VIEW view=far submit_ms=1.295
+RENDER_PROFILE view=far item=-1 chunks=0 triangles=0 draw_calls=0 submit_ms=0.003 render_fence_ms=3.224 frame_ms=5.375 frame_p95_ms=6.547 rebuilds=0
+RENDER_PROFILE view=far item=6515 chunks=52 triangles=183712 draw_calls=152 submit_ms=0.582 render_fence_ms=3.459 frame_ms=6.161 frame_p95_ms=7.791 rebuilds=0
+RENDER_PROFILE view=far item=6517 chunks=15 triangles=66352 draw_calls=45 submit_ms=0.229 render_fence_ms=3.381 frame_ms=5.739 frame_p95_ms=7.434 rebuilds=0
+RENDER_PROFILE view=far item=6516 chunks=29 triangles=155008 draw_calls=132 submit_ms=0.419 render_fence_ms=3.378 frame_ms=5.980 frame_p95_ms=7.472 rebuilds=0
+RENDER_PROFILE view=far item=0 chunks=96 triangles=405072 draw_calls=329 submit_ms=1.043 render_fence_ms=3.189 frame_ms=6.472 frame_p95_ms=7.817 rebuilds=0
+SHADOW_PROFILE view=far triangles=1274112
+CAPTURE D:\dsp-dev\FluidPipes\obj\orbitalring-checks\20261027-001121\BepInEx\plugins\orbital-profile-far.png
+FIRST_VIEW view=planet submit_ms=1.242
+RENDER_PROFILE view=planet item=-1 chunks=0 triangles=0 draw_calls=0 submit_ms=0.004 render_fence_ms=3.272 frame_ms=5.465 frame_p95_ms=6.679 rebuilds=0
+RENDER_PROFILE view=planet item=6515 chunks=69 triangles=666192 draw_calls=207 submit_ms=0.622 render_fence_ms=3.378 frame_ms=6.250 frame_p95_ms=7.232 rebuilds=0
+RENDER_PROFILE view=planet item=6517 chunks=17 triangles=172608 draw_calls=51 submit_ms=0.215 render_fence_ms=3.237 frame_ms=5.656 frame_p95_ms=7.758 rebuilds=0
+RENDER_PROFILE view=planet item=6516 chunks=34 triangles=423616 draw_calls=166 submit_ms=0.462 render_fence_ms=3.636 frame_ms=6.777 frame_p95_ms=8.543 rebuilds=0
+RENDER_PROFILE view=planet item=0 chunks=120 triangles=1262416 draw_calls=424 submit_ms=1.159 render_fence_ms=2.698 frame_ms=6.234 frame_p95_ms=7.041 rebuilds=0
+SHADOW_PROFILE view=planet triangles=1274112
+CAPTURE D:\dsp-dev\FluidPipes\obj\orbitalring-checks\20261027-001121\BepInEx\plugins\orbital-profile-planet.png
+CAPTURE D:\dsp-dev\FluidPipes\obj\orbitalring-checks\20261027-001121\BepInEx\plugins\orbital-profile-braces.png
+PASS distant mesh cache invalidation on cut/reconnect
+MESH_PROFILE item=6515 meshes=265 vertices=743255 triangles=991912
+MESH_PROFILE item=6517 meshes=72 vertices=198465 triangles=329728
+MESH_PROFILE item=6516 meshes=292 vertices=918532 triangles=761584
+Completed=1

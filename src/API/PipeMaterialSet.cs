@@ -31,6 +31,9 @@ namespace FluidPipes.API
         /// <summary>机器接口外壳材质。</summary>
         public Material MachineShell => materials[PipeSurfaceRole.MachineShell];
 
+        /// <summary>结构附件和装饰模块材质。</summary>
+        public Material Detail => materials[PipeSurfaceRole.Detail];
+
         internal PipeMaterialSet(PipeAppearance appearance)
         {
             owned = appearance != null;
@@ -45,6 +48,7 @@ namespace FluidPipes.API
             materials[PipeSurfaceRole.Fittings] = Copy(PipeVisuals.JointMaterial);
             materials[PipeSurfaceRole.MachinePanel] = Copy(PipeVisuals.MachinePanelMaterial);
             materials[PipeSurfaceRole.MachineShell] = Copy(PipeVisuals.MachineShellMaterial);
+            materials[PipeSurfaceRole.Detail] = Copy(PipeVisuals.MachinePanelMaterial);
             if (owned)
             {
                 materials[PipeSurfaceRole.Core] = new Material(Shader.Find("Standard"));

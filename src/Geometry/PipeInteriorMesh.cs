@@ -20,7 +20,7 @@ namespace FluidPipes
         {
             if (ends.Count == 0)
             {
-                float halfLength = 0.35f * geometry.Radius / Radius;
+                float halfLength = geometry.IsolatedHalfLength;
                 InteriorPath(
                     new[] { center - forward * halfLength, center + forward * halfLength },
                     up,
@@ -72,7 +72,7 @@ namespace FluidPipes
             }
         }
 
-        private void InteriorPath(
+        internal void InteriorPath(
             IList<Vector3> points,
             Vector3 up,
             IList<Vector3> axes,
@@ -108,6 +108,11 @@ namespace FluidPipes
             var memberPoints = new Vector3[points.Count];
             foreach (var member in profile.Members)
             {
+                if (member.Pattern != null)
+                {
+                    PatternedMember(points, tangents, frames, member, up, capStart, capEnd);
+                    continue;
+                }
                 for (int row = 0; row < points.Count; row++)
                 {
                     memberPoints[row] =
@@ -119,7 +124,7 @@ namespace FluidPipes
                     memberPoints,
                     up,
                     radius * member.RadiusFraction,
-                    member.Surface == PipeSurfaceRole.Core ? 0 : 1,
+                    InteriorMaterial(member.Surface),
                     capStart,
                     capEnd,
                     null,
@@ -131,35 +136,315 @@ namespace FluidPipes
             }
         }
 
+        private void PatternedMember(
+            IList<Vector3> points,
+            IList<Vector3> tangents,
+            IList<Vector3> frames,
+            PipeInteriorMember member,
+            Vector3 up,
+            bool capStart,
+            bool capEnd
+        )
+        {
+            var pattern = member.Pattern;
+            var memberPoints = new List<Vector3>();
+            var memberTangents = new List<Vector3>();
+            var memberFrames = new List<Vector3>();
+            var radii = new List<float>();
+            var fractions = new List<float>();
+            bool hasVisibleGeometry = false;
+            var textureCoordinates = pattern.TexturePhaseSpan > 0 ? new List<float>() : null;
+            for (int segment = 1; segment < points.Count; segment++)
+            {
+                float firstPhase = pattern.PhaseAt(
+                    patternFactory,
+                    points[segment - 1] + textureOrigin
+                );
+                float delta =
+                    pattern.PhaseAt(patternFactory, points[segment] + textureOrigin) - firstPhase;
+                delta -= Mathf.Round(delta);
+                fractions.Clear();
+                if (segment == 1)
+                {
+                    fractions.Add(0);
+                }
+                fractions.Add(1);
+                if (Mathf.Abs(delta) > 0.000001f)
+                {
+                    foreach (var keyframe in pattern.Keyframes)
+                    {
+                        if (keyframe.Phase == 1)
+                        {
+                            continue;
+                        }
+                        for (int cycle = -1; cycle <= 1; cycle++)
+                        {
+                            float fraction = (keyframe.Phase + cycle - firstPhase) / delta;
+                            if (fraction > 0.00001f && fraction < 0.99999f)
+                            {
+                                fractions.Add(fraction);
+                            }
+                        }
+                    }
+                }
+                fractions.Sort();
+                foreach (float fraction in fractions)
+                {
+                    Vector3 center = Vector3.Lerp(points[segment - 1], points[segment], fraction);
+                    Vector3 tangent = Vector3
+                        .Lerp(tangents[segment - 1], tangents[segment], fraction)
+                        .normalized;
+                    Vector3 frameUp = Vector3
+                        .Lerp(frames[segment - 1], frames[segment], fraction)
+                        .normalized;
+                    Vector3 side = Vector3.Cross(tangent, frameUp).normalized;
+                    pattern.Sample(
+                        firstPhase + delta * fraction,
+                        out float radialOffset,
+                        out float scale
+                    );
+                    if (scale < 0.00001f)
+                    {
+                        scale = 0;
+                    }
+                    memberPoints.Add(
+                        center
+                            + radius
+                                * (
+                                    side * member.Offset.x
+                                    + frameUp * (member.Offset.y + radialOffset)
+                                )
+                    );
+                    const float derivativeStep = 0.001f;
+                    pattern.Sample(
+                        pattern.PhaseAt(
+                            patternFactory,
+                            center + textureOrigin + tangent * derivativeStep
+                        ),
+                        out float nextOffset,
+                        out _
+                    );
+                    pattern.Sample(
+                        pattern.PhaseAt(
+                            patternFactory,
+                            center + textureOrigin - tangent * derivativeStep
+                        ),
+                        out float previousOffset,
+                        out _
+                    );
+                    memberTangents.Add(
+                        (
+                            tangent
+                            + frameUp
+                                * (radius * (nextOffset - previousOffset) / (2 * derivativeStep))
+                        ).normalized
+                    );
+                    memberFrames.Add(frameUp);
+                    radii.Add(radius * member.RadiusFraction * scale);
+                    hasVisibleGeometry |= scale > 0;
+                    textureCoordinates?.Add(
+                        Mathf.Repeat(firstPhase + delta * fraction - pattern.TextureStartPhase, 1)
+                            / pattern.TexturePhaseSpan
+                    );
+                }
+            }
+            if (!hasVisibleGeometry)
+            {
+                return;
+            }
+            var visibleSegments = new bool[radii.Count - 1];
+            for (int segment = 0; segment < visibleSegments.Length; segment++)
+            {
+                visibleSegments[segment] = radii[segment] > 0 || radii[segment + 1] > 0;
+            }
+            Tube(
+                memberPoints,
+                up,
+                radius * member.RadiusFraction,
+                InteriorMaterial(member.Surface),
+                capStart,
+                capEnd,
+                radii,
+                memberTangents,
+                memberFrames,
+                false,
+                member.Section,
+                visibleSegments,
+                textureCoordinates: textureCoordinates
+            );
+        }
+
+        private static int InteriorMaterial(PipeSurfaceRole surface) =>
+            surface == PipeSurfaceRole.Detail ? 4
+            : surface == PipeSurfaceRole.Fittings ? 1
+            : 0;
+
+        private void AnnularTube(
+            IList<Vector3> points,
+            Vector3 up,
+            float outerRadius,
+            int material,
+            bool capStart,
+            bool capEnd,
+            IList<float> radii,
+            IList<Vector3> tangents,
+            IList<Vector3> frames,
+            PipeInteriorSection section,
+            IList<float> textureCoordinates
+        )
+        {
+            int radialSegments =
+                detailLevel > 0 ? (detailLevel == 1 ? 32 : 24)
+                : outerRadius >= 0.5f ? 96
+                : Sides;
+            float ratio = section.InnerRadiusFraction / section.RadiusFraction;
+            var outerSection = PipeInteriorSection.Circle(section.RadiusFraction);
+            float[] outerRadii = null;
+            bool[] visibleSegments = null;
+            if (radii != null)
+            {
+                outerRadii = new float[radii.Count];
+                visibleSegments = new bool[radii.Count - 1];
+                for (int index = 0; index < radii.Count; index++)
+                {
+                    float scale = radii[index] / outerRadius;
+                    outerRadii[index] = outerRadius * ratio + outerRadius * (1 - ratio) * scale;
+                    if (index > 0)
+                    {
+                        visibleSegments[index - 1] =
+                            radii[index - 1] > 0.000001f || radii[index] > 0.000001f;
+                    }
+                }
+            }
+            int outerStart = vertices.Count;
+            Tube(
+                points,
+                up,
+                outerRadius,
+                material,
+                false,
+                false,
+                outerRadii,
+                tangents,
+                frames,
+                false,
+                outerSection,
+                visibleSegments,
+                textureCoordinates,
+                radialSegments
+            );
+            int innerStart = vertices.Count;
+            int innerIndexStart = indices[material].Count;
+            float[] innerRadii = null;
+            if (radii != null)
+            {
+                innerRadii = new float[radii.Count];
+                for (int index = 0; index < radii.Count; index++)
+                {
+                    innerRadii[index] = outerRadius * ratio;
+                }
+            }
+            Tube(
+                points,
+                up,
+                outerRadius * ratio,
+                material,
+                false,
+                false,
+                innerRadii,
+                tangents,
+                frames,
+                false,
+                outerSection,
+                visibleSegments,
+                textureCoordinates,
+                radialSegments
+            );
+            for (int index = innerStart; index < normals.Count; index++)
+            {
+                normals[index] = -normals[index];
+            }
+            for (int index = innerIndexStart; index < indices[material].Count; index += 3)
+            {
+                int second = indices[material][index + 1];
+                indices[material][index + 1] = indices[material][index + 2];
+                indices[material][index + 2] = second;
+            }
+            if (capStart)
+            {
+                Vector3 tangent = PathTangent(points, tangents, 0, Vector3.zero);
+                Annulus(
+                    points[0],
+                    -tangent,
+                    outerStart,
+                    outerRadius * ratio,
+                    material,
+                    radialSegments
+                );
+            }
+            if (capEnd)
+            {
+                int last = points.Count - 1;
+                Vector3 tangent = PathTangent(points, tangents, last, Vector3.zero);
+                Annulus(
+                    points[last],
+                    tangent,
+                    outerStart + last * (radialSegments + 1),
+                    outerRadius * ratio,
+                    material,
+                    radialSegments
+                );
+            }
+        }
+
         private static Vector2 RectanglePoint(
             PipeInteriorSection section,
             int column,
+            int radialSegments,
             out Vector2 normal
         )
         {
-            int perimeterColumn = column % Sides;
-            int corner = perimeterColumn / 8;
-            float fraction = (perimeterColumn % 8) / 7f;
+            int cornerSamples = radialSegments / 4;
+            int perimeterColumn = column % radialSegments;
+            int corner = perimeterColumn / cornerSamples;
+            float fraction = (float)(perimeterColumn % cornerSamples) / (cornerSamples - 1);
             float angle = (corner + fraction) * Mathf.PI * 0.5f;
             normal = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
             float horizontal = corner == 0 || corner == 3 ? 1 : -1;
             float vertical = corner < 2 ? 1 : -1;
-            return new Vector2(
+            Vector2 point =
+                new Vector2(
                     horizontal * (section.WidthFraction * 0.5f - section.BevelFraction),
                     vertical * (section.HeightFraction * 0.5f - section.BevelFraction)
                 )
                 + normal * section.BevelFraction;
+            float rotation = section.RotationDegrees * Mathf.Deg2Rad;
+            float cosine = Mathf.Cos(rotation);
+            float sine = Mathf.Sin(rotation);
+            normal = new Vector2(
+                normal.x * cosine - normal.y * sine,
+                normal.x * sine + normal.y * cosine
+            );
+            return new Vector2(
+                point.x * cosine - point.y * sine,
+                point.x * sine + point.y * cosine
+            );
         }
 
-        private static float RectanglePerimeterCoordinate(PipeInteriorSection section, int column)
+        private static float RectanglePerimeterCoordinate(
+            PipeInteriorSection section,
+            int column,
+            int radialSegments
+        )
         {
-            if (column == Sides)
+            if (column == radialSegments)
             {
                 return 1;
             }
 
-            int corner = column / 8;
-            float cornerFraction = (column % 8) / 7f;
+            int cornerSamples = radialSegments / 4;
+            int corner = column / cornerSamples;
+            float cornerFraction = (float)(column % cornerSamples) / (cornerSamples - 1);
             float cornerLength = section.BevelFraction * Mathf.PI * 0.5f;
             float horizontalLength = section.WidthFraction - 2 * section.BevelFraction;
             float verticalLength = section.HeightFraction - 2 * section.BevelFraction;
@@ -176,7 +461,8 @@ namespace FluidPipes
             Vector3 normal,
             int ring,
             int material,
-            float radius
+            float radius,
+            int radialSegments
         )
         {
             int start = vertices.Count;
@@ -185,7 +471,7 @@ namespace FluidPipes
             vertices.Add(center);
             normals.Add(normal);
             uvs.Add(new Vector2(0.5f, 0.5f));
-            for (int column = 0; column <= Sides; column++)
+            for (int column = 0; column <= radialSegments; column++)
             {
                 Vector3 radial = vertices[ring + column] - center;
                 vertices.Add(center + radial);
@@ -197,7 +483,7 @@ namespace FluidPipes
                     )
                 );
             }
-            for (int column = 0; column < Sides; column++)
+            for (int column = 0; column < radialSegments; column++)
             {
                 OrientedTriangle(material, start, start + column + 1, start + column + 2);
             }

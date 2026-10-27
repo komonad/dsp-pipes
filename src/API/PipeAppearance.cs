@@ -18,8 +18,14 @@ namespace FluidPipes.API
         /// <summary>用于在相邻网格截面间展开纵向纹理坐标的周期。零表示坐标不具周期性。</summary>
         public float TextureCoordinatePeriod { get; }
 
-        /// <summary>可选的结构截面。截面对象会启用内部渲染，并提供绘制在管壁内部的构件。</summary>
+        /// <summary>可选的结构截面。截面对象会启用内部渲染，并提供位于管道几何包络内的构件。</summary>
         public PipeInteriorProfile Interior { get; }
+
+        /// <summary>可选的角向管壁分区，适用于 Glass 管壁模式。</summary>
+        public PipeWallLayout WallLayout { get; }
+
+        /// <summary>可见管壁半径与几何包络半径之比。内部结构构件仍按完整包络度量。</summary>
+        public float WallRadiusFraction { get; }
 
         internal Action<PipeMaterialSet> ConfigureMaterials { get; }
         internal Action<PipeEffectContext, MaterialPropertyBlock> ApplyEffects { get; }
@@ -65,6 +71,77 @@ namespace FluidPipes.API
         /// <param name="interior">启用内部渲染的结构截面。null 使用由 hasCore 和 coreRadiusFraction 控制的单导体。</param>
         /// <exception cref="ArgumentOutOfRangeException">管壁模式、内芯半径或坐标周期超出其支持范围。</exception>
         public PipeAppearance(
+            PipeWallMode wallMode,
+            Action<PipeMaterialSet> configureMaterials,
+            bool hasCore,
+            float coreRadiusFraction,
+            Action<PipeEffectContext, MaterialPropertyBlock> applyEffects,
+            Func<Vector3, float> textureCoordinate,
+            float textureCoordinatePeriod,
+            PipeInteriorProfile interior
+        )
+            : this(
+                wallMode,
+                configureMaterials,
+                hasCore,
+                coreRadiusFraction,
+                applyEffects,
+                textureCoordinate,
+                textureCoordinatePeriod,
+                interior,
+                null
+            ) { }
+
+        /// <summary>定义缓存材质和可选的每批次效果。</summary>
+        /// <param name="wallMode">管壁渲染类别。</param>
+        /// <param name="configureMaterials">主线程回调，每轮资源生成时配置库自有材质副本。</param>
+        /// <param name="hasCore">是否绘制装饰性导体。</param>
+        /// <param name="coreRadiusFraction">导体半径比例，大于零且不大于 0.85。</param>
+        /// <param name="applyEffects">主线程绘制回调，将批次统一变量写入借用的属性块；该属性块在本次回调期间有效。</param>
+        /// <param name="textureCoordinate">将世界空间中心线位置映射为纵向纹理坐标的纯函数；null 使用局部弧长。</param>
+        /// <param name="textureCoordinatePeriod">纹理坐标回调的有限非负周期。正值将各相邻截面展开到最近的周期；零保留回调值。局部弧长坐标保持其默认映射。</param>
+        /// <param name="interior">启用内部渲染的结构截面。null 使用由 hasCore 和 coreRadiusFraction 控制的单导体。</param>
+        /// <param name="wallLayout">角向管壁分区；null 使用整面管壁。</param>
+        /// <exception cref="ArgumentException">表面分区使用了 Glass 以外的管壁模式，或缩小的管壁缺少结构截面。</exception>
+        /// <exception cref="ArgumentOutOfRangeException">管壁模式、内芯半径或坐标周期超出其支持范围。</exception>
+        public PipeAppearance(
+            PipeWallMode wallMode,
+            Action<PipeMaterialSet> configureMaterials,
+            bool hasCore,
+            float coreRadiusFraction,
+            Action<PipeEffectContext, MaterialPropertyBlock> applyEffects,
+            Func<Vector3, float> textureCoordinate,
+            float textureCoordinatePeriod,
+            PipeInteriorProfile interior,
+            PipeWallLayout wallLayout
+        )
+            : this(
+                wallMode,
+                configureMaterials,
+                hasCore,
+                coreRadiusFraction,
+                applyEffects,
+                textureCoordinate,
+                textureCoordinatePeriod,
+                interior,
+                wallLayout,
+                1
+            ) { }
+
+        /// <summary>定义缓存材质和可选的每批次效果。</summary>
+        /// <param name="wallMode">管壁渲染类别。</param>
+        /// <param name="configureMaterials">主线程回调，每轮资源生成时配置库自有材质副本。</param>
+        /// <param name="hasCore">是否绘制装饰性导体。</param>
+        /// <param name="coreRadiusFraction">导体半径比例，大于零且不大于 0.85。</param>
+        /// <param name="applyEffects">主线程绘制回调，将批次统一变量写入借用的属性块；该属性块在本次回调期间有效。</param>
+        /// <param name="textureCoordinate">将世界空间中心线位置映射为纵向纹理坐标的纯函数；null 使用局部弧长。</param>
+        /// <param name="textureCoordinatePeriod">纹理坐标回调的有限非负周期。正值将各相邻截面展开到最近的周期；零保留回调值。局部弧长坐标保持其默认映射。</param>
+        /// <param name="interior">启用内部渲染的结构截面。null 使用由 hasCore 和 coreRadiusFraction 控制的单导体。</param>
+        /// <param name="wallLayout">角向管壁分区；null 使用整面管壁。</param>
+        /// <param name="wallRadiusFraction">可见管壁与几何包络的半径比，范围为 0.1 到 1；小于一时需要内部结构截面。</param>
+        /// <exception cref="ArgumentException">表面分区使用了 Glass 以外的管壁模式，或缩小的管壁缺少结构截面。</exception>
+        /// <exception cref="ArgumentOutOfRangeException">管壁模式、内芯半径或坐标周期超出其支持范围。</exception>
+        public PipeAppearance(
             PipeWallMode wallMode = PipeWallMode.Glass,
             Action<PipeMaterialSet> configureMaterials = null,
             bool hasCore = false,
@@ -72,7 +149,9 @@ namespace FluidPipes.API
             Action<PipeEffectContext, MaterialPropertyBlock> applyEffects = null,
             Func<Vector3, float> textureCoordinate = null,
             float textureCoordinatePeriod = 0,
-            PipeInteriorProfile interior = null
+            PipeInteriorProfile interior = null,
+            PipeWallLayout wallLayout = null,
+            float wallRadiusFraction = 1
         )
         {
             if (!Enum.IsDefined(typeof(PipeWallMode), wallMode))
@@ -98,6 +177,23 @@ namespace FluidPipes.API
                 throw new ArgumentOutOfRangeException(nameof(textureCoordinatePeriod));
             }
 
+            if (
+                float.IsNaN(wallRadiusFraction)
+                || float.IsInfinity(wallRadiusFraction)
+                || wallRadiusFraction < 0.1f
+                || wallRadiusFraction > 1
+            )
+            {
+                throw new ArgumentOutOfRangeException(nameof(wallRadiusFraction));
+            }
+            if (wallRadiusFraction != 1 && interior == null)
+            {
+                throw new ArgumentException(
+                    "A reduced wall radius requires an interior profile.",
+                    nameof(interior)
+                );
+            }
+            WallRadiusFraction = wallRadiusFraction;
             WallMode = wallMode;
             ConfigureMaterials = configureMaterials;
             HasCore = hasCore || interior != null;
@@ -105,7 +201,15 @@ namespace FluidPipes.API
             ApplyEffects = applyEffects;
             TextureCoordinate = textureCoordinate;
             TextureCoordinatePeriod = textureCoordinatePeriod;
+            if (wallLayout != null && wallMode != PipeWallMode.Glass)
+            {
+                throw new ArgumentException(
+                    "Wall layouts use Glass wall mode.",
+                    nameof(wallLayout)
+                );
+            }
             Interior = interior;
+            WallLayout = wallLayout;
         }
     }
 }

@@ -53,6 +53,22 @@ public sealed partial class OrbitalRingChecks : BaseUnityPlugin
         Application.runInBackground = true;
         startupTime = Time.realtimeSinceStartup;
         new Harmony("local.fluidpipes.orbitalring.checks").PatchAll(typeof(OrbitalRingChecks));
+        if (
+            NativeOrbitalBelts
+            && Chainloader.PluginInfos.TryGetValue(OrbitalRingGuid, out var nativeOrbitalRing)
+        )
+        {
+            Type integration = nativeOrbitalRing
+                .Instance.GetType()
+                .Assembly.GetType("ProjectOrbitalRing.Compatibility.OrbitalPipeIntegration", true);
+            new Harmony("local.fluidpipes.orbitalring.native-render").Patch(
+                AccessTools.Method(integration, "Register"),
+                prefix: new HarmonyMethod(
+                    typeof(OrbitalRingChecks),
+                    nameof(KeepNativeOrbitalModels)
+                )
+            );
+        }
         Record(
             "LOADED OrbitalRing="
                 + (
@@ -71,6 +87,8 @@ public sealed partial class OrbitalRingChecks : BaseUnityPlugin
         __result = true;
         return false;
     }
+
+    private static bool KeepNativeOrbitalModels() => false;
 
     [HarmonyPostfix, HarmonyPatch(typeof(VFPreload), "Update")]
     private static void Preload(VFPreload __instance)
@@ -116,6 +134,12 @@ public sealed partial class OrbitalRingChecks : BaseUnityPlugin
             )
             {
                 tested = true;
+                if (Environment.GetEnvironmentVariable("FluidPipesOrbitalAppearance") == "1")
+                {
+                    PrepareOrbitalAppearance();
+                    StartCoroutine(CaptureOrbitalAppearance());
+                    return;
+                }
                 RunChecks();
                 if (Environment.GetEnvironmentVariable("FluidPipesOrbitalComponents") == "1")
                 {

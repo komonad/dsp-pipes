@@ -1,0 +1,32 @@
+LOADED OrbitalRing=1.0.20 FluidPipes=0.10.0
+PROTOTYPES pipe=9460 valve=9461
+SCENE ring item=6515 band=1 hemisphere=1 nodes=1000
+SCENE ring item=6515 band=2 hemisphere=1 nodes=1000
+SCENE ring item=6515 band=1 hemisphere=-1 nodes=1000
+SCENE ring item=6515 band=2 hemisphere=-1 nodes=1000
+SCENE ring item=6516 band=1 hemisphere=1 nodes=1000
+SCENE ring item=6516 band=1 hemisphere=-1 nodes=1000
+SCENE ring item=6517 band=2 hemisphere=1 nodes=1000
+SCENE complete orbital rings on full foundation; audio muted
+RENDER_PROFILE view=near item=-1 chunks=0 submit_ms=0.000 render_fence_ms=3.666 frame_ms=6.159 frame_p95_ms=8.675 rebuilds=0
+RENDER_PROFILE view=near item=6515 chunks=16 submit_ms=0.170 render_fence_ms=4.066 frame_ms=6.764 frame_p95_ms=10.120 rebuilds=0
+RENDER_PROFILE view=near item=6517 chunks=6 submit_ms=0.087 render_fence_ms=3.683 frame_ms=6.246 frame_p95_ms=8.771 rebuilds=0
+RENDER_PROFILE view=near item=6516 chunks=13 submit_ms=0.196 render_fence_ms=3.723 frame_ms=6.242 frame_p95_ms=7.920 rebuilds=0
+RENDER_PROFILE view=near item=0 chunks=35 submit_ms=0.389 render_fence_ms=3.531 frame_ms=6.248 frame_p95_ms=7.496 rebuilds=0
+CAPTURE D:\dsp-dev\FluidPipes\obj\orbitalring-checks\20261026-213431\BepInEx\plugins\orbital-profile-near.png
+RENDER_PROFILE view=far item=-1 chunks=0 submit_ms=0.000 render_fence_ms=3.403 frame_ms=6.236 frame_p95_ms=7.911 rebuilds=0
+RENDER_PROFILE view=far item=6515 chunks=112 submit_ms=0.687 render_fence_ms=3.670 frame_ms=6.780 frame_p95_ms=10.993 rebuilds=0
+RENDER_PROFILE view=far item=6517 chunks=33 submit_ms=0.239 render_fence_ms=3.714 frame_ms=6.462 frame_p95_ms=8.842 rebuilds=0
+RENDER_PROFILE view=far item=6516 chunks=59 submit_ms=0.718 render_fence_ms=3.743 frame_ms=7.276 frame_p95_ms=11.704 rebuilds=0
+RENDER_PROFILE view=far item=0 chunks=204 submit_ms=1.720 render_fence_ms=6.745 frame_ms=11.741 frame_p95_ms=12.974 rebuilds=0
+CAPTURE D:\dsp-dev\FluidPipes\obj\orbitalring-checks\20261026-213431\BepInEx\plugins\orbital-profile-far.png
+RENDER_PROFILE view=planet item=-1 chunks=0 submit_ms=0.000 render_fence_ms=3.647 frame_ms=6.248 frame_p95_ms=7.955 rebuilds=0
+RENDER_PROFILE view=planet item=6515 chunks=512 submit_ms=2.973 render_fence_ms=7.032 frame_ms=12.998 frame_p95_ms=17.795 rebuilds=0
+RENDER_PROFILE view=planet item=6517 chunks=132 submit_ms=0.785 render_fence_ms=3.473 frame_ms=6.918 frame_p95_ms=11.992 rebuilds=0
+RENDER_PROFILE view=planet item=6516 chunks=264 submit_ms=2.839 render_fence_ms=6.535 frame_ms=12.499 frame_p95_ms=13.446 rebuilds=0
+RENDER_PROFILE view=planet item=0 chunks=908 submit_ms=6.761 render_fence_ms=9.824 frame_ms=20.758 frame_p95_ms=24.859 rebuilds=0
+CAPTURE D:\dsp-dev\FluidPipes\obj\orbitalring-checks\20261026-213431\BepInEx\plugins\orbital-profile-planet.png
+MESH_PROFILE item=6515 meshes=512 vertices=11645568 triangles=14905344
+MESH_PROFILE item=6517 meshes=132 vertices=2413455 triangles=3208640
+MESH_PROFILE item=6516 meshes=528 vertices=9601000 triangles=8074240
+Completed=1

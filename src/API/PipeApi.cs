@@ -14,7 +14,7 @@ namespace FluidPipes.API
         public const string PluginGuid = "com.komonad.dsp.fluidpipes";
 
         /// <summary>用于最低版本依赖声明的 mod 发行版本。</summary>
-        public const string ModVersion = "0.8.0";
+        public const string ModVersion = "0.10.4";
 
         /// <summary>受支持的 API 契约代数。</summary>
         public const int ApiVersion = 1;

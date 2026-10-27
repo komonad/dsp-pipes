@@ -41,6 +41,8 @@ public sealed partial class SceneCapture : BaseUnityPlugin
     private bool parallelLineOnly;
     private bool machinePortsOnly;
     private bool copperInteractionsOnly;
+    private bool windowPipePreviewOnly;
+    private bool powerBuildingReferenceOnly;
     private bool builtInContentDisabled;
     private bool fixtureSave;
     private string inspectSave;
@@ -67,6 +69,10 @@ public sealed partial class SceneCapture : BaseUnityPlugin
             Environment.GetEnvironmentVariable("FluidPipesCapture") == "machine-ports";
         copperInteractionsOnly =
             Environment.GetEnvironmentVariable("FluidPipesCapture") == "copper-interactions";
+        windowPipePreviewOnly =
+            Environment.GetEnvironmentVariable("FluidPipesCapture") == "window-pipes";
+        powerBuildingReferenceOnly =
+            Environment.GetEnvironmentVariable("FluidPipesCapture") == "power-reference";
         builtInContentDisabled =
             Environment.GetEnvironmentVariable("FluidPipesBuiltInContent") == "0";
         inspectSave = Environment.GetEnvironmentVariable("FluidPipesInspectSave");
@@ -131,7 +137,12 @@ public sealed partial class SceneCapture : BaseUnityPlugin
     {
         if (
             instance != null
-            && (instance.machinePortsOnly || instance.copperInteractionsOnly)
+            && (
+                instance.machinePortsOnly
+                || instance.copperInteractionsOnly
+                || instance.windowPipePreviewOnly
+                || instance.powerBuildingReferenceOnly
+            )
             && __instance.languageSelectGroup.gameObject.activeSelf
         )
         {
@@ -589,6 +600,16 @@ public sealed partial class SceneCapture : BaseUnityPlugin
                 && (planet.data.veinPool[entityId2].pos - center).sqrMagnitude < 900
             )
                 factory.RemoveVeinWithComponents(entityId2);
+        if (powerBuildingReferenceOnly)
+        {
+            CreatePowerBuildingReference();
+            return;
+        }
+        if (windowPipePreviewOnly)
+        {
+            CreateWindowPipePreview();
+            return;
+        }
         if (connectionsOnly)
         {
             CreateConnections();
@@ -1479,6 +1500,26 @@ public sealed partial class SceneCapture : BaseUnityPlugin
     {
         for (int frame = 0; frame < 150; frame++)
             yield return null;
+        if (powerBuildingReferenceOnly)
+        {
+            var reference = CapturePowerBuildingReference();
+            while (reference.MoveNext())
+            {
+                yield return reference.Current;
+            }
+            Finish(null);
+            yield break;
+        }
+        if (windowPipePreviewOnly)
+        {
+            var preview = CaptureWindowPipePreview();
+            while (preview.MoveNext())
+            {
+                yield return preview.Current;
+            }
+            Finish(null);
+            yield break;
+        }
         if (copperInteractionsOnly)
         {
             var capture = CaptureCopperInteractions();

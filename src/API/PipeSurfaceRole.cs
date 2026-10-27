@@ -20,5 +20,8 @@ namespace FluidPipes.API
 
         /// <summary>机器接口外壳。</summary>
         MachineShell,
+
+        /// <summary>结构附件、线圈和装饰模块的独立材质。</summary>
+        Detail,
     }
 }

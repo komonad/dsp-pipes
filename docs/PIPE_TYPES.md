@@ -96,7 +96,7 @@ PipeTypes.Register("example.transport", definition);
 
 | 构造参数 | 默认值 | 有效范围 | 含义 |
 | --- | ---: | --- | --- |
-| `radius` | 0.32 | 0.08–1.2 | 外管壁半径；外径为该值的两倍 |
+| `radius` | 0.32 | 0.08–2 | 外管壁半径；外径为该值的两倍 |
 | `centerHeight` | 0.34 | 0–2 | 从原生实体位置沿行星径向到管道中心线的偏移 |
 | `fittingScale` | 1 | 0.75–1.5 | 管箍厚度和轴向深度倍率；内孔随管壁半径适配 |
 | `supportRingWidth` | 0 | 0–`radius` | 直段及端点中部支撑环的轴向宽度；零表示省略支撑环 |
@@ -228,3 +228,65 @@ public PipeAppearance(
 圆形成员的三参数构造 `PipeInteriorMember(Vector2, float, PipeSurfaceRole)` 同样保留二进制签名。截面构造重载为 `PipeInteriorMember(Vector2, PipeInteriorSection, PipeSurfaceRole)`，圆形构造委托到 `PipeInteriorSection.Circle`。
 
 `PipeTypeDefinition` 保留七参数签名 `(string, ItemProto, PipeAppearance, PipeBehavior, string, Func<PlanetFactory, int, int>, PipeDirectionMode)`，全部参数必填，并委托到 `geometry: null` 的八参数构造路径。八参数重载允许通过可选 `geometry` 设置尺寸。
+
+## 管壁表面分区
+
+`PipeAppearance.wallLayout` 接收不可变的 `PipeWallLayout`，并使用 `Glass` 管壁模式。`PipeWallBand` 描述中心角、水平角宽、竖直角宽与材质角色。`Wall` 使用透明管壁材质，`Fittings` 使用不透明材质；默认背景为 `Fittings`，后面的重叠带覆盖前面的带。
+
+```csharp
+var layout = new PipeWallLayout(new[]
+{
+    new PipeWallBand(centerDegrees: 0, widthDegrees: 90),
+    new PipeWallBand(centerDegrees: 180, widthDegrees: 0, verticalWidthDegrees: 90),
+});
+```
+
+角宽范围为0–360度，集合支持1–16个表面带。默认在60–80度仰角范围内平滑切换水平和竖直角宽。水平截面以径向上方为参考；竖直截面使用行星北向，极点采用备用参考轴。无向类型使用中心角为0或180度的带，或相邻排列、宽度与材质一致的镜像对，以保持正反建造时的外观一致。
+
+分区使用32边截面的网格面采样。铜壳与玻璃分配到独立子网格，分别使用不透明和透明绘制；金属接头和封口维持不透明。渲染缓存沿用原有的空间区块与类型分组。
+
+`PipeAppearance` 的七参数、八参数构造签名继续保留。九参数构造在末尾加入可选 `PipeWallLayout wallLayout`，并提供各参数的默认值。
+
+
+### 周期性构件
+
+`PipeInteriorMember` 的四参数构造函数接收 `PipeInteriorPattern`。模式使用中心线世界位置计算相位，并在关键帧之间线性改变径向偏移和截面倍率。斜撑可以用上下往复的径向偏移定义；周期支架可以用零与一之间的截面倍率定义。
+
+```csharp
+var diagonal = new PipeInteriorPattern(
+    (factory, position) => position.z / 4f,
+    new[]
+    {
+        new PipeInteriorKeyframe(0, -0.30f),
+        new PipeInteriorKeyframe(0.5f, 0.30f),
+        new PipeInteriorKeyframe(1, -0.30f),
+    }
+);
+var brace = new PipeInteriorMember(
+    new Vector2(0.5f, 0),
+    PipeInteriorSection.RoundedRectangle(0.075f, 0.085f, 0.015f),
+    PipeSurfaceRole.Fittings,
+    diagonal
+);
+```
+
+此示例沿世界 Z 轴每四单位重复。曲线路径的回调使用路径自己的连续长度坐标。相邻采样点的相位跨度保持小于半个周期，相同的世界位置保持相同的相位。网格只在经过的关键帧处补充截面；周期边界独立于建造节点。零倍率在构件中心收拢实心截面。`PipeInteriorSection.Annulus(outerRadiusFraction, innerRadiusFraction)` 提供内外周界；其周期倍率改变壁厚，内孔半径保持固定。圆环的零壁厚区段省略表面，用于形成分隔的加速器套环。每个关键帧的偏移和缩放后的周界均位于半径 0.9 的归一化包络内。无向截面的镜像构件共享同一个模式实例。
+
+
+`PipeAppearance.wallRadiusFraction` 控制结构类型的可见外管壁半径与几何包络半径之比，范围为 0.1 到 1，默认值为 1。该设置与 `PipeInteriorProfile` 配合使用：透明束流腔可以占包络的 66%，空心加速器套环占 70% 到 84%，形成套在腔体外侧的设施。构件尺寸、碰撞和类型的几何包络继续使用完整半径。
+
+
+`PipeInteriorSection.Rotated(degrees)` 返回旋转后的不可变截面。矩形按 180 度周期归一化，圆形和圆环保持旋转对称。它可将细矩形肋条沿圆形管壁的径向排列。无向截面的镜像构件使用互为相反数的旋转角度，构件的中心偏移保持横向镜像。
+
+
+结构截面构件可选择 `PipeSurfaceRole.Detail`，通过 `PipeMaterialSet.Detail` 配置独立的附件材质。该角色适用于线圈、绝缘套节和设备模块；它参与绘制效果回调，并具有独立的子网格和不透明阴影。网格顶点提供白色颜色属性，粒子类材质可在着色器中使用顶点颜色调制纹理。
+
+
+`PipeInteriorPattern.WithTextureWindow(startPhase, phaseSpan)` 将整张纵向纹理展开到周期内的局部区间。例如 `WithTextureWindow(-0.05f, 0.10f)` 把相位零附近的十分之一个周期映射为 V = 0 到 1。它用于稀疏套节和设备机匣，使纹理分辨率集中于可见表面。跨周期的窗口保持连续；材质的纵向 UV 倍率设为一。省略此窗口时，构件沿用外观的世界纹理坐标。
+
+
+## 原生传送带建造
+
+外部模拟的结构类型可使用 `PipeDirectionMode.Directed`，并对定义调用 `WithConstructionMode(PipeConstructionMode.NativeBelt)`。此模式使用原生传送带的规划、端口迁移、占位和碰撞检查；程序化渲染继续使用类型的几何、外观、缓存和 LOD。普通共享库存管道使用 `PipeConstructionMode.Pipe`。
+
+`PipeGeometryProfile` 的五参数构造器可独立设置 `isolatedHalfLength`。该值只控制孤立节点的模型纵向半长度，默认四参数构造器保留由半径换算的尺寸。已连接节点的长度继续由实际连接端点确定。

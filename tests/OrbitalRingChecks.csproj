@@ -7,10 +7,13 @@
         <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     </PropertyGroup>
     <ItemGroup>
+        <Reference Include="UnityEngine.PhysicsModule" HintPath="$(Managed)/UnityEngine.PhysicsModule.dll" Private="false" />
         <Compile Include="OrbitalRingChecks.cs" />
         <Compile Include="OrbitalPipeChecks.cs" />
         <Compile Include="OrbitalDragChecks.cs" />
         <Compile Include="OrbitalTextureChecks.cs" />
+        <Compile Include="OrbitalRenderProfile.cs" />
+        <Compile Include="OrbitalRepairChecks.cs" />
         <ProjectReference Include="../FluidPipes.csproj" />
         <Reference
             Include="Assembly-CSharp"

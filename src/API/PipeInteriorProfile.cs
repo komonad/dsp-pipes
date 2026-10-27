@@ -20,10 +20,13 @@ namespace FluidPipes.API
         /// <summary>绘制该构件所用的材质和效果角色。</summary>
         public PipeSurfaceRole Surface { get; }
 
+        /// <summary>沿世界路径重复的可选偏移与截面模式。</summary>
+        public PipeInteriorPattern Pattern { get; }
+
         /// <summary>定义管壁包络内部的圆形梁或导体。</summary>
         /// <param name="offset">有限的归一化偏移，其模长加上 radiusFraction 严格小于 0.9。</param>
         /// <param name="radiusFraction">构件半径比例，范围为 0.01 到 0.85。</param>
-        /// <param name="surface">Core 选择导体材质；Fittings 选择金属接头材质。</param>
+        /// <param name="surface">Core 选择导体材质；Fittings 选择金属接头材质；Detail 选择结构附件材质。</param>
         /// <exception cref="ArgumentOutOfRangeException">偏移、半径或表面角色超出其支持范围。</exception>
         public PipeInteriorMember(
             Vector2 offset,
@@ -35,13 +38,28 @@ namespace FluidPipes.API
         /// <summary>将已配置的截面放置在管道包络内部。</summary>
         /// <param name="offset">有限的归一化横向和径向偏移。其模长加上截面的包围半径严格小于 0.9。</param>
         /// <param name="section">不可变的周界形状和归一化尺寸。</param>
-        /// <param name="surface">Core 选择导体材质；Fittings 选择金属接头材质。</param>
+        /// <param name="surface">Core 选择导体材质；Fittings 选择金属接头材质；Detail 选择结构附件材质。</param>
         /// <exception cref="ArgumentNullException">截面为 null。</exception>
         /// <exception cref="ArgumentOutOfRangeException">偏移或表面角色超出其支持范围。</exception>
         public PipeInteriorMember(
             Vector2 offset,
             PipeInteriorSection section,
             PipeSurfaceRole surface = PipeSurfaceRole.Core
+        )
+            : this(offset, section, surface, null) { }
+
+        /// <summary>将周期性截面构件放置在管道包络内部。</summary>
+        /// <param name="offset">有限的归一化横向和径向偏移。</param>
+        /// <param name="section">不可变的基础周界形状和尺寸。</param>
+        /// <param name="surface">Core、Fittings 或 Detail 材质角色。</param>
+        /// <param name="pattern">可选的周期模式；每个关键帧的偏移和截面均位于半径 0.9 的包络内。</param>
+        /// <exception cref="ArgumentNullException">截面为 null。</exception>
+        /// <exception cref="ArgumentOutOfRangeException">偏移、包络或表面角色超出支持范围。</exception>
+        public PipeInteriorMember(
+            Vector2 offset,
+            PipeInteriorSection section,
+            PipeSurfaceRole surface,
+            PipeInteriorPattern pattern
         )
         {
             if (section == null)
@@ -58,13 +76,29 @@ namespace FluidPipes.API
             {
                 throw new ArgumentOutOfRangeException(nameof(offset));
             }
-            if (surface != PipeSurfaceRole.Core && surface != PipeSurfaceRole.Fittings)
+            if (
+                surface != PipeSurfaceRole.Core
+                && surface != PipeSurfaceRole.Fittings
+                && surface != PipeSurfaceRole.Detail
+            )
             {
                 throw new ArgumentOutOfRangeException(nameof(surface));
             }
             Offset = offset;
             Section = section;
             Surface = surface;
+            Pattern = pattern;
+            if (pattern != null)
+            {
+                foreach (var keyframe in pattern.Keyframes)
+                {
+                    var displaced = offset + Vector2.up * keyframe.RadialOffset;
+                    if (displaced.magnitude + section.RadiusFraction * keyframe.Scale >= 0.9f)
+                    {
+                        throw new ArgumentOutOfRangeException(nameof(pattern));
+                    }
+                }
+            }
         }
     }
 
@@ -143,7 +177,8 @@ namespace FluidPipes.API
                 if (
                     !matchedMembers[candidateIndex]
                     && candidate.Surface == source.Surface
-                    && candidate.Section.Matches(source.Section)
+                    && candidate.Section.MatchesMirror(source.Section)
+                    && ReferenceEquals(candidate.Pattern, source.Pattern)
                     && (candidate.Offset - offset).sqrMagnitude <= 0.0000000001f
                 )
                 {

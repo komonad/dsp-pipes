@@ -1,0 +1,33 @@
+LOADED OrbitalRing=1.0.20 FluidPipes=0.10.1
+PROTOTYPES pipe=9460 valve=9461
+SCENE ring item=6515 band=1 hemisphere=1 nodes=1000
+SCENE ring item=6515 band=2 hemisphere=1 nodes=1000
+SCENE ring item=6515 band=1 hemisphere=-1 nodes=1000
+SCENE ring item=6515 band=2 hemisphere=-1 nodes=1000
+SCENE ring item=6516 band=1 hemisphere=1 nodes=1000
+SCENE ring item=6516 band=1 hemisphere=-1 nodes=1000
+SCENE ring item=6517 band=2 hemisphere=1 nodes=1000
+RENDER_MODE pipe-models
+SCENE complete orbital rings on full foundation; audio muted
+RENDER_PROFILE view=near item=-1 chunks=0 triangles=0 draw_calls=0 submit_ms=0.003 render_fence_ms=3.291 frame_ms=5.449 frame_p95_ms=6.626 rebuilds=0
+RENDER_PROFILE view=near item=6515 chunks=6 triangles=68560 draw_calls=18 submit_ms=0.104 render_fence_ms=3.213 frame_ms=5.567 frame_p95_ms=6.984 rebuilds=0
+RENDER_PROFILE view=near item=6517 chunks=2 triangles=19200 draw_calls=6 submit_ms=0.056 render_fence_ms=3.606 frame_ms=5.993 frame_p95_ms=6.700 rebuilds=0
+RENDER_PROFILE view=near item=6516 chunks=3 triangles=51728 draw_calls=15 submit_ms=0.083 render_fence_ms=3.535 frame_ms=5.768 frame_p95_ms=6.676 rebuilds=0
+RENDER_PROFILE view=near item=0 chunks=11 triangles=139488 draw_calls=39 submit_ms=0.177 render_fence_ms=3.135 frame_ms=5.476 frame_p95_ms=6.477 rebuilds=0
+CAPTURE D:\dsp-dev\FluidPipes\obj\orbitalring-checks\20261026-223926\BepInEx\plugins\orbital-profile-near.png
+RENDER_PROFILE view=far item=-1 chunks=0 triangles=0 draw_calls=0 submit_ms=0.003 render_fence_ms=3.779 frame_ms=6.185 frame_p95_ms=8.625 rebuilds=0
+RENDER_PROFILE view=far item=6515 chunks=51 triangles=480800 draw_calls=149 submit_ms=0.370 render_fence_ms=3.579 frame_ms=6.230 frame_p95_ms=7.227 rebuilds=0
+RENDER_PROFILE view=far item=6517 chunks=15 triangles=169536 draw_calls=45 submit_ms=0.132 render_fence_ms=3.392 frame_ms=5.727 frame_p95_ms=6.702 rebuilds=0
+RENDER_PROFILE view=far item=6516 chunks=28 triangles=301224 draw_calls=127 submit_ms=0.313 render_fence_ms=3.280 frame_ms=5.733 frame_p95_ms=6.563 rebuilds=0
+RENDER_PROFILE view=far item=0 chunks=94 triangles=951560 draw_calls=321 submit_ms=0.717 render_fence_ms=3.487 frame_ms=6.246 frame_p95_ms=7.690 rebuilds=0
+CAPTURE D:\dsp-dev\FluidPipes\obj\orbitalring-checks\20261026-223926\BepInEx\plugins\orbital-profile-far.png
+RENDER_PROFILE view=planet item=-1 chunks=0 triangles=0 draw_calls=0 submit_ms=0.003 render_fence_ms=3.414 frame_ms=5.606 frame_p95_ms=6.464 rebuilds=0
+RENDER_PROFILE view=planet item=6515 chunks=207 triangles=1905448 draw_calls=609 submit_ms=1.265 render_fence_ms=2.804 frame_ms=6.186 frame_p95_ms=6.649 rebuilds=0
+RENDER_PROFILE view=planet item=6517 chunks=55 triangles=621600 draw_calls=165 submit_ms=0.368 render_fence_ms=3.594 frame_ms=9.413 frame_p95_ms=11.845 rebuilds=0
+RENDER_PROFILE view=planet item=6516 chunks=108 triangles=1124136 draw_calls=487 submit_ms=0.995 render_fence_ms=3.171 frame_ms=6.206 frame_p95_ms=7.362 rebuilds=0
+RENDER_PROFILE view=planet item=0 chunks=370 triangles=3651184 draw_calls=1261 submit_ms=2.555 render_fence_ms=4.103 frame_ms=8.698 frame_p95_ms=11.223 rebuilds=0
+CAPTURE D:\dsp-dev\FluidPipes\obj\orbitalring-checks\20261026-223926\BepInEx\plugins\orbital-profile-planet.png
+MESH_PROFILE item=6515 meshes=256 vertices=2374000 triangles=2354816
+MESH_PROFILE item=6517 meshes=68 vertices=612398 triangles=760704
+MESH_PROFILE item=6516 meshes=272 vertices=1263216 triangles=1393792
+Completed=1

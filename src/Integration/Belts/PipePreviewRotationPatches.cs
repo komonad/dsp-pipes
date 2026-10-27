@@ -16,7 +16,7 @@ namespace FluidPipes.Integration.Belts
         ]
         public static void InitializePlannedRotations(BuildTool_Path __instance)
         {
-            if (!PipeTypeRegistry.IsItem(__instance.handItem?.ID))
+            if (!PipeTypeRegistry.UsesPipeConstruction(__instance.handItem?.ID))
             {
                 return;
             }
@@ -128,7 +128,9 @@ namespace FluidPipes.Integration.Belts
         private static Quaternion SelectRotation(Vector3 position, float yaw, BuildPreview preview)
         {
             // 原生路径预览以单位变换开始；初始化姿态保留规划切线。
-            return PipeTypeRegistry.IsItem(preview.item?.ID) && HasPlannedRotation(preview.lrot)
+            return
+                PipeTypeRegistry.UsesPipeConstruction(preview.item?.ID)
+                && HasPlannedRotation(preview.lrot)
                 ? preview.lrot
                 : Maths.SphericalRotation(position, yaw);
         }
@@ -193,7 +195,7 @@ namespace FluidPipes.Integration.Belts
             BuildPreview preview
         )
         {
-            if (PipeTypeRegistry.IsItem(preview.item?.ID))
+            if (PipeTypeRegistry.UsesPipeConstruction(preview.item?.ID))
             {
                 rotation = Maths.SphericalRotation(position, 0);
             }

@@ -795,7 +795,7 @@ namespace FluidPipes
                 return false;
             }
 
-            if (!PipeTypeRegistry.IsUndirected(tool.handItem?.ID))
+            if (!PipeTypeRegistry.UsesPipeConstruction(tool.handItem?.ID))
             {
                 return true;
             }
@@ -809,10 +809,7 @@ namespace FluidPipes
                 return true;
             }
 
-            if (
-                JunctionMember(tool, tool.startObjectId, entityId)
-                || JunctionMember(tool, tool.castObjectId, entityId)
-            )
+            if (AllowedContact(tool, entityId))
             {
                 return false;
             }
@@ -825,13 +822,34 @@ namespace FluidPipes
             && PipeRuntime.IsPipeObject(tool.factory, endpoint)
             && (entityId == endpoint || PipeTopology.Adjacent(tool.factory, endpoint, entityId));
 
-        private static int Filter(BuildTool_Path tool, UnityEngine.Collider[] colliders, int count)
+        private static bool AllowedContact(BuildTool_Path tool, int entityId)
         {
             if (
-                !PipeTypeRegistry.IsUndirected(tool.handItem?.ID)
-                || !PipeRuntime.IsPipeObject(tool.factory, tool.startObjectId)
-                    && !PipeRuntime.IsPipeObject(tool.factory, tool.castObjectId)
+                PipeTypeRegistry.IsUndirected(tool.handItem?.ID)
+                && (
+                    JunctionMember(tool, tool.startObjectId, entityId)
+                    || JunctionMember(tool, tool.castObjectId, entityId)
+                )
             )
+            {
+                return true;
+            }
+            foreach (var preview in tool.buildPreviews)
+            {
+                if (
+                    JunctionMember(tool, preview.inputObjId, entityId)
+                    || JunctionMember(tool, preview.outputObjId, entityId)
+                )
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static int Filter(BuildTool_Path tool, UnityEngine.Collider[] colliders, int count)
+        {
+            if (!PipeTypeRegistry.UsesPipeConstruction(tool.handItem?.ID))
             {
                 return count;
             }
@@ -848,10 +866,7 @@ namespace FluidPipes
                         : 0;
                     if (
                         PipeRuntime.IsPipeObject(tool.factory, entityId)
-                        && (
-                            JunctionMember(tool, tool.startObjectId, entityId)
-                            || JunctionMember(tool, tool.castObjectId, entityId)
-                        )
+                        && (AllowedContact(tool, entityId))
                     )
                     {
                         continue;
@@ -879,7 +894,7 @@ namespace FluidPipes
                 if (tool.buildPreviews.Count == 1)
                 {
                     var direction = tool.buildPreviews[0].lrot * UnityEngine.Vector3.forward;
-                    float halfLength = 0.35f * geometry.Radius / PipeMesh.Radius;
+                    float halfLength = geometry.IsolatedHalfLength;
                     return Filter(
                         tool,
                         results,

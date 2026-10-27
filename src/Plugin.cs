@@ -111,6 +111,14 @@ namespace FluidPipes
                 {
                     PipeTypeRegistry.Seal();
                     TransportItemRegistry.Refresh();
+                    foreach (var entry in PipeTypeRegistry.Entries)
+                    {
+                        if (entry.Definition.Behavior == API.PipeBehavior.Structure)
+                        {
+                            PipeMaterialLibrary.Get(entry.Definition.Prototype.ID);
+                        }
+                    }
+                    PipeVisuals.SteelLighting(Vector3.up);
                     Prototypes.Ready = true;
                 }
                 catch (Exception error)
@@ -122,6 +130,7 @@ namespace FluidPipes
             {
                 API.PipeTypes.FlushChanges();
                 PipeVisuals.FlushColliderChanges();
+                PipeVisuals.PrewarmStructureMeshes(GameMain.localPlanet?.factory, GameCamera.main);
                 PipePanel.Update();
                 PipeMachinePortPanel.Update();
             }

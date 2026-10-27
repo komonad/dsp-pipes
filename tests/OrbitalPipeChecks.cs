@@ -15,33 +15,12 @@ public sealed partial class OrbitalRingChecks
     private Type orbitalPositions;
     private object orbitalLayout;
     private readonly Dictionary<int, List<int>> displayArcs = new Dictionary<int, List<int>>();
+    private static bool NativeOrbitalBelts =>
+        Environment.GetEnvironmentVariable("FluidPipesNativeOrbitalBelts") == "1";
 
     private void RunOrbitalComponentChecks()
     {
-        Assembly orbitalAssembly = Chainloader
-            .PluginInfos[OrbitalRingGuid]
-            .Instance.GetType()
-            .Assembly;
-        orbitalIntegration = orbitalAssembly.GetType(
-            "ProjectOrbitalRing.Compatibility.OrbitalPipeIntegration",
-            true
-        );
-        orbitalPositions = orbitalAssembly.GetType(
-            "ProjectOrbitalRing.Patches.Logic.OrbitalRing.PosTool",
-            true
-        );
-        orbitalLayout = AccessTools
-            .Method(orbitalPositions, "GetLayout")
-            .Invoke(null, new object[] { factory.planet });
-        Type managerType = orbitalAssembly.GetType(
-            "ProjectOrbitalRing.Patches.Logic.OrbitalRing.OrbitalStationManager",
-            true
-        );
-        object manager = AccessTools.Property(managerType, "Instance").GetValue(null);
-        AccessTools
-            .Method(managerType, "AddPlanetId")
-            .Invoke(manager, new[] { (object)factory.planetId, orbitalLayout });
-        factory.PlanetReformAll(1, 0, true);
+        InitializeOrbitalScene();
         Record("PASS orbital scene planet has full native foundation");
         CheckOrbitalDraggedConstruction();
         double angleUnit = (double)
@@ -59,8 +38,7 @@ public sealed partial class OrbitalRingChecks
                 "external orbital simulation " + itemId
             );
             Require(
-                type.DirectionMode
-                    == (itemId == 6516 ? PipeDirectionMode.Directed : PipeDirectionMode.Undirected),
+                type.DirectionMode == PipeDirectionMode.Directed,
                 "orbital direction policy " + itemId
             );
             var circle = new List<int>();
@@ -150,6 +128,248 @@ public sealed partial class OrbitalRingChecks
         CheckOrbitalTextureCoordinates();
     }
 
+    private void InitializeOrbitalScene()
+    {
+        Assembly orbitalAssembly = Chainloader
+            .PluginInfos[OrbitalRingGuid]
+            .Instance.GetType()
+            .Assembly;
+        orbitalIntegration = orbitalAssembly.GetType(
+            "ProjectOrbitalRing.Compatibility.OrbitalPipeIntegration",
+            !NativeOrbitalBelts
+        );
+        orbitalPositions = orbitalAssembly.GetType(
+            "ProjectOrbitalRing.Patches.Logic.OrbitalRing.PosTool",
+            true
+        );
+        orbitalLayout = AccessTools
+            .Method(orbitalPositions, "GetLayout")
+            .Invoke(null, new object[] { factory.planet });
+        Type managerType = orbitalAssembly.GetType(
+            "ProjectOrbitalRing.Patches.Logic.OrbitalRing.OrbitalStationManager",
+            true
+        );
+        object manager = AccessTools.Property(managerType, "Instance").GetValue(null);
+        AccessTools
+            .Method(managerType, "AddPlanetId")
+            .Invoke(manager, new[] { (object)factory.planetId, orbitalLayout });
+        factory.PlanetReformAll(1, 0, true);
+    }
+
+    private void PrepareOrbitalAppearance()
+    {
+        factory = GameMain.localPlanet.factory;
+        radial = GameMain.mainPlayer.position.normalized;
+        east = Vector3.Cross(radial, Vector3.up).normalized;
+        north = Vector3.Cross(east, radial).normalized;
+        InitializeOrbitalScene();
+        double angleUnit = (double)
+            AccessTools.Field(orbitalLayout.GetType(), "AngleUnit").GetValue(orbitalLayout);
+        int nodeCount = (int)Math.Round(360 / angleUnit);
+        bool sevenRings = Environment.GetEnvironmentVariable("FluidPipesSevenOrbitalRings") == "1";
+        if (sevenRings && Mathf.Abs(factory.planet.realRadius - 200) > 0.01f)
+        {
+            throw new InvalidOperationException(
+                "The orbital render scene requires planet radius 200."
+            );
+        }
+        int[][] specifications = sevenRings
+            ? new[]
+            {
+                new[] { 6515, 1, 1 },
+                new[] { 6515, 2, 1 },
+                new[] { 6515, 1, -1 },
+                new[] { 6515, 2, -1 },
+                new[] { 6516, 1, 1 },
+                new[] { 6516, 1, -1 },
+                new[] { 6517, 2, 1 },
+            }
+            : new[] { new[] { 6515, 0, 1 }, new[] { 6517, 0, 1 }, new[] { 6516, 0, 1 } };
+        foreach (int[] specification in specifications)
+        {
+            int itemId = specification[0];
+            var circle = new List<int>();
+            for (int index = 0; index < nodeCount; index++)
+            {
+                circle.Add(
+                    PlaceOrbital(
+                        itemId,
+                        index * 360f / nodeCount,
+                        specification[1],
+                        specification[2]
+                    )
+                );
+                if (index > 0)
+                {
+                    ConnectOrbital(circle[index - 1], circle[index]);
+                }
+            }
+            ConnectOrbital(circle[circle.Count - 1], circle[0]);
+            if (!displayArcs.ContainsKey(itemId))
+            {
+                displayArcs.Add(itemId, circle);
+            }
+            Record(
+                "SCENE ring item="
+                    + itemId
+                    + " band="
+                    + specification[1]
+                    + " hemisphere="
+                    + specification[2]
+                    + " nodes="
+                    + nodeCount
+            );
+            if (!NativeOrbitalBelts)
+            {
+                AccessTools
+                    .Method(orbitalIntegration, "Schedule")
+                    .Invoke(null, new object[] { factory, circle[0] });
+            }
+        }
+        if (!NativeOrbitalBelts)
+        {
+            AccessTools.Method(orbitalIntegration, "Update").Invoke(null, null);
+        }
+        else
+        {
+            for (int entityId = 1; entityId < factory.entityCursor; entityId++)
+            {
+                int beltId = factory.entityPool[entityId].beltId;
+                if (beltId > 0)
+                {
+                    factory.cargoTraffic.AlterBeltRenderer(
+                        beltId,
+                        factory.entityPool,
+                        factory.planet.physics.colChunks
+                    );
+                }
+            }
+        }
+        Record("RENDER_MODE " + (NativeOrbitalBelts ? "native-belts" : "pipe-models"));
+        Record("SCENE complete orbital rings on full foundation; audio muted");
+    }
+
+    private IEnumerator CaptureOrbitalAppearance()
+    {
+        if (Environment.GetEnvironmentVariable("FluidPipesOrbitalRenderProfile") == "1")
+        {
+            yield return GuardProfile(ProfileOrbitalRendering());
+            if (!finished)
+            {
+                Finish(null);
+            }
+            yield break;
+        }
+        for (int frame = 0; frame < 30; frame++)
+        {
+            yield return null;
+        }
+        foreach (int itemId in new[] { 6515, 6517, 6516 })
+        {
+            if (
+                !TryCaptureOrbitalView(
+                    (camera, target) => CaptureCompleteOrbitalSegment(camera, target, itemId)
+                )
+            )
+            {
+                yield break;
+            }
+            yield return null;
+        }
+        if (!TryCaptureOrbitalView(CaptureAcceleratorDetail))
+        {
+            yield break;
+        }
+        yield return null;
+        if (!TryCaptureOrbitalView(CaptureOrbitalComparison))
+        {
+            yield break;
+        }
+        yield return null;
+        if (!TryCaptureOrbitalView(CaptureOrbitalOverview))
+        {
+            yield break;
+        }
+        Finish(null);
+    }
+
+    private IEnumerator GuardProfile(IEnumerator profile)
+    {
+        while (true)
+        {
+            object next;
+            try
+            {
+                if (!profile.MoveNext())
+                {
+                    yield break;
+                }
+                next = profile.Current;
+            }
+            catch (Exception error)
+            {
+                Finish(error);
+                yield break;
+            }
+            yield return next;
+        }
+    }
+
+    private void CaptureAcceleratorDetail(Camera camera, RenderTexture target)
+    {
+        Type layoutType = orbitalIntegration.Assembly.GetType(
+            "ProjectOrbitalRing.Compatibility.OrbitalTextureLayout",
+            true
+        );
+        object layout = AccessTools
+            .Method(layoutType, "FromBand")
+            .Invoke(
+                null,
+                new object[] { factory.planet, 6516, 1, OrbitalDisplayGeometry(6516).CenterHeight }
+            );
+        int repeats = (int)AccessTools.Field(layoutType, "RepeatCount").GetValue(layout);
+        int facilities = Math.Max(1, Mathf.RoundToInt(repeats / 12f));
+        List<int> circle = displayArcs[6516];
+        float index = Mathf.Round(facilities * 0.25f) / facilities * circle.Count;
+        int first = Mathf.FloorToInt(index);
+        Vector3 focus = Vector3.Lerp(
+            OrbitalDisplayCenter(circle[first]),
+            OrbitalDisplayCenter(circle[(first + 1) % circle.Count]),
+            index - first
+        );
+        Vector3 localUp = focus.normalized;
+        Vector3 localEast = Vector3.Cross(Vector3.up, localUp).normalized;
+        Vector3 localNorth = Vector3.Cross(localUp, localEast).normalized;
+        Vector3 viewOffset = localUp * 5 - localNorth * 9 - localEast * 13;
+        camera.orthographicSize = 1.85f;
+        camera.transform.SetPositionAndRotation(
+            focus + viewOffset,
+            Quaternion.LookRotation(-viewOffset, localUp)
+        );
+        SaveOrbitalView(camera, target, "orbital-accelerator-detail", 6516);
+    }
+
+    private void CaptureCompleteOrbitalSegment(Camera camera, RenderTexture target, int itemId)
+    {
+        List<int> circle = displayArcs[itemId];
+        Vector3 focus = OrbitalDisplayCenter(circle[circle.Count / 4]);
+        Vector3 localUp = focus.normalized;
+        Vector3 localEast = Vector3.Cross(Vector3.up, localUp).normalized;
+        Vector3 localNorth = Vector3.Cross(localUp, localEast).normalized;
+        Vector3 viewOffset =
+            localUp * (itemId == 6517 ? 12 : 8)
+            - localNorth * (itemId == 6517 ? 14 : 18)
+            - localEast * 7;
+        camera.orthographicSize = 3.2f;
+        camera.transform.SetPositionAndRotation(
+            focus + viewOffset,
+            Quaternion.LookRotation(-viewOffset, localUp)
+        );
+        RecordOrbitalMaterials(itemId);
+        Record("SCENE ring=" + itemId + " complete=" + OrbitalCompletionState(circle[0]));
+        SaveOrbitalView(camera, target, "orbital-appearance-" + itemId, itemId);
+    }
+
     private bool OrbitalComplete(int root)
     {
         return (bool)
@@ -184,14 +404,16 @@ public sealed partial class OrbitalRingChecks
         return (bool)AccessTools.Field(ring.GetType(), fieldName).GetValue(ring);
     }
 
-    private int PlaceOrbital(int itemId, float longitude)
+    private int PlaceOrbital(int itemId, float longitude, int band = 0, int hemisphere = 1)
     {
         float radians = longitude * Mathf.Deg2Rad;
         float radius = factory.planet.realRadius + 0.2f + (itemId == 6515 ? 48 : 43) * 1.3333333f;
         var candidate =
-            new Vector3(Mathf.Cos(radians), 0.05f, Mathf.Sin(radians)).normalized * radius;
+            new Vector3(Mathf.Cos(radians), hemisphere * 0.05f, Mathf.Sin(radians)).normalized
+            * radius;
         int side =
-            itemId == 6516 ? 1
+            band != 0 ? band
+            : itemId == 6516 ? 1
             : itemId == 6517 ? 2
             : 0;
         Vector3 position = (Vector3)
@@ -217,8 +439,11 @@ public sealed partial class OrbitalRingChecks
     {
         factory.WriteObjectConn(from, 0, true, to, 1);
         if (
-            PipeTypes.TryGet(factory.entityPool[from].protoId, out var type)
-            && type.DirectionMode == PipeDirectionMode.Directed
+            NativeOrbitalBelts
+            || (
+                PipeTypes.TryGet(factory.entityPool[from].protoId, out var type)
+                && type.DirectionMode == PipeDirectionMode.Directed
+            )
         )
         {
             CargoTraffic traffic = factory.cargoTraffic;
@@ -468,12 +693,25 @@ public sealed partial class OrbitalRingChecks
         return definition.Geometry;
     }
 
-    private void SaveOrbitalView(Camera camera, RenderTexture renderTarget, string name)
+    private void SaveOrbitalView(
+        Camera camera,
+        RenderTexture renderTarget,
+        string name,
+        int itemId = 0
+    )
     {
         factory.planet.factoryModel.DrawInstancedBatches(camera, true);
         AccessTools
-            .Method(typeof(PipeApi).Assembly.GetType("FluidPipes.PipeVisuals", true), "Draw")
-            .Invoke(null, new object[] { factory, camera });
+            .Method(
+                typeof(PipeApi).Assembly.GetType("FluidPipes.PipeVisuals", true),
+                itemId == 0 ? "Draw" : "DrawType"
+            )
+            .Invoke(
+                null,
+                itemId == 0
+                    ? new object[] { factory, camera }
+                    : new object[] { factory, camera, itemId }
+            );
         camera.Render();
         RenderTexture previousActive = RenderTexture.active;
         var pixels = new Texture2D(

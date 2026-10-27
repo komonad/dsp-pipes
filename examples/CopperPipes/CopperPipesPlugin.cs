@@ -11,8 +11,8 @@ using xiaoye97;
 namespace CopperPipes
 {
     /// <summary>通过 FluidPipes 公共扩展 API 注册可制造的铜制管道。</summary>
-    [BepInPlugin(PluginGuid, "Copper Pipes", "1.0.1")]
-    [BepInDependency(PipeApi.PluginGuid, "0.8.0")]
+    [BepInPlugin(PluginGuid, "Copper Pipes", "1.1.0")]
+    [BepInDependency(PipeApi.PluginGuid, "0.9.0")]
     [BepInDependency(CommonAPIPlugin.GUID)]
     [BepInDependency("me.xiaoye97.plugin.Dyson.LDBTool")]
     [CommonAPISubmoduleDependency(nameof(LocalizationModule))]
@@ -31,8 +31,8 @@ namespace CopperPipes
             LocalizationModule.RegisterTranslation("CopperPipes.Name", "Copper Pipe", "铜管", "");
             LocalizationModule.RegisterTranslation(
                 "CopperPipes.Description",
-                "Opaque copper pipe. Connected copper and glass pipes share one inventory. Capacity: 10 per segment.",
-                "不透明铜制管道。铜管与玻璃管连通后共享库存，每段容量10。",
+                "Copper pipe with glass inspection windows. Connected pipes share one inventory. Capacity: 10 per segment.",
+                "带玻璃观察窗的铜制管道。连通管道共享库存，每段容量10。",
                 ""
             );
             LDBTool.PreAddDataAction += RegisterPrototypes;
@@ -83,12 +83,22 @@ namespace CopperPipes
             };
             LDBTool.PreAddProto(copperRecipe);
             var appearance = new PipeAppearance(
-                wallMode: PipeWallMode.Opaque,
+                wallMode: PipeWallMode.Glass,
                 configureMaterials: materials =>
                 {
-                    ConfigureCopper(materials.Wall);
                     ConfigureCopper(materials.Fittings);
-                }
+                },
+                wallLayout: new PipeWallLayout(
+                    new[]
+                    {
+                        new PipeWallBand(centerDegrees: 0, widthDegrees: 90),
+                        new PipeWallBand(
+                            centerDegrees: 180,
+                            widthDegrees: 0,
+                            verticalWidthDegrees: 90
+                        ),
+                    }
+                )
             );
             PipeTypes.Register(
                 ownerGuid: PluginGuid,

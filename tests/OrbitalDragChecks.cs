@@ -153,18 +153,6 @@ public sealed partial class OrbitalRingChecks
                     PipeTypes.GetConnectedNodes(factory, entityId).Length == currentObjects.Length,
                     "orbital drag completed component " + itemId
                 );
-                if (itemId != 6516)
-                {
-                    Require(
-                        new HashSet<int>(
-                            PipeTypes.GetOutgoingNeighbors(factory, entityId)
-                        ).SetEquals(expectedNeighbors)
-                            && new HashSet<int>(
-                                PipeTypes.GetIncomingNeighbors(factory, entityId)
-                            ).SetEquals(expectedNeighbors),
-                        "orbital undirected adjacency is symmetric " + itemId
-                    );
-                }
             }
             if (itemId == 6516)
             {

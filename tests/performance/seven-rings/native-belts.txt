@@ -1,0 +1,19 @@
+LOADED OrbitalRing=1.0.20 FluidPipes=0.10.2
+PROTOTYPES pipe=9460 valve=9461
+SCENE ring item=6515 band=1 hemisphere=1 nodes=1000
+SCENE ring item=6515 band=2 hemisphere=1 nodes=1000
+SCENE ring item=6515 band=1 hemisphere=-1 nodes=1000
+SCENE ring item=6515 band=2 hemisphere=-1 nodes=1000
+SCENE ring item=6516 band=1 hemisphere=1 nodes=1000
+SCENE ring item=6516 band=1 hemisphere=-1 nodes=1000
+SCENE ring item=6517 band=2 hemisphere=1 nodes=1000
+RENDER_MODE native-belts
+SCENE complete orbital rings on full foundation; audio muted
+RENDER_PROFILE view=near item=0 chunks=0 triangles=0 draw_calls=0 submit_ms=0.024 render_fence_ms=3.392 frame_ms=5.909 frame_p95_ms=8.622 rebuilds=0
+CAPTURE D:\dsp-dev\FluidPipes\obj\orbitalring-checks\20261026-224323\BepInEx\plugins\orbital-profile-near.png
+RENDER_PROFILE view=far item=0 chunks=0 triangles=0 draw_calls=0 submit_ms=0.023 render_fence_ms=3.597 frame_ms=6.134 frame_p95_ms=8.041 rebuilds=0
+CAPTURE D:\dsp-dev\FluidPipes\obj\orbitalring-checks\20261026-224323\BepInEx\plugins\orbital-profile-far.png
+RENDER_PROFILE view=planet item=0 chunks=0 triangles=0 draw_calls=0 submit_ms=0.023 render_fence_ms=3.718 frame_ms=5.929 frame_p95_ms=7.540 rebuilds=0
+CAPTURE D:\dsp-dev\FluidPipes\obj\orbitalring-checks\20261026-224323\BepInEx\plugins\orbital-profile-planet.png
+NATIVE_MESH_PROFILE submitted_vertices=112000 submitted_triangles=56000
+Completed=1
