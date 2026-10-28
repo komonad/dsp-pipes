@@ -4,6 +4,8 @@
 
 ## Local build
 
+Run the following commands from the repository root. The dependency profile needs BepInEx, CommonAPI, LDBTool, DSPModSave and their dependencies. Runtime test scripts also copy NebulaMultiplayerModApi from that profile.
+
 Copy `Local.props.example` to `Local.props`. Set `Managed` to the installed game's managed assembly directory and `BepInExCore` to the dependency profile's BepInEx core directory. Native runtime fixtures additionally use the publicized assembly selected by `GameAssembly`; the production plugin references the unmodified game assembly.
 
 The plugin targets .NET Framework 4.7.2 and C# 7.3. A .NET SDK, framework reference assemblies and PowerShell 7 are required. The standalone core checks target .NET 8.
@@ -17,7 +19,7 @@ pwsh -NoProfile -File tests/run.ps1
 dotnet build tests/SceneCapture.csproj -c Release
 ```
 
-`bin/Release/FluidPipes.dll` is the runtime plugin. The adjacent `FluidPipes.xml` provides IDE documentation for API consumers. The inventory consumer builds as `PipeConsumer.dll`. The material extension builds as `CopperPipes.dll`; it registers an independent item and recipe through the public API. Set its `FluidPipesAssemblyPath` property to build against a published DLL.
+`bin/Release/FluidPipes.dll` is the runtime plugin. The adjacent `FluidPipes.xml` provides IDE documentation for API consumers. The inventory consumer builds as `PipeConsumer.dll`. The material extension builds as `CopperPipes.dll`; it registers an independent item and recipe through the public API. Set the CopperPipes project's `FluidPipesAssemblyPath` property to select the DLL it references.
 
 ## Validation
 
@@ -36,7 +38,7 @@ pwsh -NoProfile -File tests/capture-scene.ps1 -ParallelLine -InspectSave samples
 
 The parallel fixture contains three plastic chemical plants, sandbox source/sink towers and parallel pipe/belt lanes. It checks stable production, count conservation, pipe-to-belt inserter transfer and native construction-bar selection. Other harness modes cover geometry, connection patterns, cube networks, valve interaction and inserter appearance.
 
-Performance reports identify the runtime, workload and measured CPU stages for each result. Interactive frame-rate assessment requires a complete loaded factory and frame-level measurements. The validation environment's allocation counter reports zero for a known allocation, so current checks classify it as unavailable and verify physical cargo counts separately. See [measurements](../tests/PERFORMANCE.en.md).
+Performance reports identify the runtime, workload and measured CPU stages. Interactive frame-rate assessment requires a complete loaded factory and frame-level measurements. Runtime checks validate the allocation counter with a known allocation before using it; a failed validation marks the counter as unavailable. Physical cargo counts are checked separately. See [performance measurement](../tests/PERFORMANCE.en.md).
 
 The OrbitalRing compatibility harness copies core files, preloaders and the required plugins from an installed OrbitalRing profile into a fresh directory under `obj/orbitalring-checks/`. It launches a hidden sandbox with an isolated document/save directory. Select the source profile explicitly:
 
@@ -46,11 +48,11 @@ pwsh -NoProfile -File tests/run-orbitalring.ps1 -SourceProfile C:/path/to/Orbita
 pwsh -NoProfile -File tests/run-orbitalring.ps1 -SourceProfile C:/path/to/OrbitalRing-profile -Vanilla
 ```
 
-Each supply case synchronously steps `FactoryStorage.GameTickTank` 600 times, equivalent to ten seconds at 60 ticks per second. The fixture activates an infinite tank through its native inventory window, attaches a real pipe or blue belt, and records extraction totals and reservoir contents. Assertions cover 300-item continuous output, buffered backpressure, prefilled inventory, independent source capacity, activation-state retention, source switches, mixed-fluid rejection, finite count/point conservation, activation through pipe input and independent rates for multiple sources sharing one node. An unrestricted output-port probe clears the blue belt buffer every tick to verify native insertion attempts; native belt throughput requires advancing the belt simulation. `orbitalring-results.txt` records the loaded versions and each measurement; `Completed=1` indicates that all assertions passed.
+Supply cases activate infinite tanks through the native inventory window and verify continuous output, backpressure, independent rates, input activation, fluid isolation and inventory conservation. Each case synchronously steps `FactoryStorage.GameTickTank` 600 times; at 60 ticks per second, the expected output is 300 items. The output-port probe clears the blue belt buffer every tick. It measures native insertion attempts; belt-throughput measurements also require advancing the belt simulation. `orbitalring-results.txt` records loaded versions and measurements; `Completed=1` indicates that all assertions passed.
 
 Construction cases use native path determination, build conditions, prebuild placement and completion. Horizontal and elevated paths complete in opposite orders; each completion checks adjacent reciprocal native slots, and the finished route supports remote inventory extraction. The vanilla mode omits OrbitalRing and runs these same construction cases. BuildBarTool mode additionally verifies the two item bindings in the transport category's upper row.
 
-The direct-machine fixture runs with `Integration.EnableMachinePorts=true` in a fresh hidden sandbox. It covers multi-liquid sulfuric-acid production, typed native I/O, demand limits, backpressure, reservations, recipe changes and persistence. Native construction runs in both directions against rotated fractional slot coordinates. Native tank pointer gestures verify shared insertion/extraction and separate tank/network clearing. Inspector checks cover native typography, padding, current/adjacent node silhouettes and stable outline caching. Sandbox valve cases cover all three level modes, isolated-side selection, fluid conflicts, proportional proliferator removal, sandbox gating and settings serialization. It writes thirteen screenshots and a report beneath `obj/machine-port-checks/`, and copies them to `screenshots/machine-ports/`.
+The direct-machine fixture enables `Integration.EnableMachinePorts` in an isolated hidden sandbox. It verifies fluid isolation during sulfuric-acid production, native I/O, demand limits, backpressure, reservations, recipe changes, construction and persistence. The same fixture checks shared inventory gestures and clearing, node outlines, and sandbox valve level modes, side selection and proliferator conservation. Screenshots and reports are written beneath `obj/machine-port-checks/` and copied to `screenshots/machine-ports/`; `-InspectSave` verifies reloading the specified save.
 
 ```powershell
 pwsh -NoProfile -File tests/run-machine-ports.ps1
@@ -63,7 +65,7 @@ Public types belong in `FluidPipes.API`, except the BepInEx plugin entry point. 
 
 Formatting uses the pinned local CSharpier tool and `.csharpierrc.json`. Restore it with `dotnet tool restore`, run `dotnet csharpier format .` to format, and `dotnet csharpier check .` to verify. Use explicit braces and one declaration per statement. Name gameplay variables by their domain roles; geometry may use conventional coordinate notation. Harmony hook argument names follow the native signatures because Harmony binds those names.
 
-Keep the external facade independent of Harmony patch classes. New item insertion paths enforce admission at the shared inventory boundary. Cargo hooks return control to native methods for ordinary belt targets. Storage and topology changes retain save compatibility and conservation checks.
+The external facade remains independent of Harmony patch classes. Item insertion paths enforce admission at the shared inventory boundary. Cargo hooks return control to native methods for ordinary belt targets. Storage and topology changes require serialization, reload and inventory-conservation checks.
 
 ## Documentation and comment language
 

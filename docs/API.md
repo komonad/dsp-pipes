@@ -1,4 +1,4 @@
-# Fluid Pipes API v2 接口文档
+# Fluid Pipes API 接口文档
 
 Fluid Pipes 同时提供管道建筑和供其它 BepInEx mod 使用的共享库存 API。安装插件及基础依赖后，即可使用管道和阀门的建造、运输、渲染与交互功能。外部集成通过 `FluidPipes.API` 命名空间访问同一套运行逻辑，实现类型使用 `internal` 可见性。
 
@@ -20,7 +20,7 @@ using BepInEx;
 using FluidPipes.API;
 
 [BepInPlugin("example.pipeconsumer", "Pipe Consumer", "1.0.0")]
-[BepInDependency(PipeApi.PluginGuid, "0.11.0")]
+[BepInDependency(PipeApi.PluginGuid, PipeApi.ModVersion)]
 public sealed class ConsumerPlugin : BaseUnityPlugin
 {
 }
@@ -28,13 +28,13 @@ public sealed class ConsumerPlugin : BaseUnityPlugin
 
 Fluid Pipes 的 GUID 是 `com.komonad.dsp.fluidpipes`。运行时需要安装 Fluid Pipes 及其依赖 BepInEx 5、CommonAPI、LDBTool、DSPModSave。仓库中的 [可编译示例](../examples/PipeConsumer/PipeConsumer.csproj) 展示依赖声明、注册生命周期和存取方式。
 
-`PipeApi.ApiVersion` 为 2，`PipeApi.ModVersion` 为 `0.11.0`。扩展通过 API v2 的公开类型编译，并声明对应的最低插件依赖版本。
+`PipeApi.ModVersion` 是插件版本，`PipeApi.ApiVersion` 是接口契约标识。依赖声明使用 `PipeApi.ModVersion`，与编译时引用的程序集保持一致。
 
 类型定义通过 `PipeTypeDefinition.CreateSharedInventory` 或 `CreateStructure` 创建。外观使用一个 `PipeAppearance` 构造器，支持工厂感知的纹理坐标和 `receiveShadows` 设置。
 
 ## 初始化和生命周期
 
-0.7.0 的 `PipeTypes` 提供独立物品类型、连接方向、结构组件和渲染扩展，详见 [类型与外观扩展](PIPE_TYPES.md)。共享库存 API 适用于 `PipeBehavior.SharedInventory`；`Structure` 类型通过拓扑 API 接入外部运行逻辑。
+`PipeTypes` 提供独立物品类型、连接方向、结构组件和渲染扩展，详见 [类型与外观扩展](PIPE_TYPES.md)。共享库存 API 适用于 `PipeBehavior.SharedInventory`；`Structure` 类型通过拓扑 API 接入外部运行逻辑。
 
 在依赖 mod 的 `Awake` 中可调用 `RegisterTransportItems`，物品 ID 会在游戏数据库初始化时解析。注册参数数组被复制；相同物品可由多个 mod 独立注册。注册返回 `IDisposable`，在所属插件的 `OnDestroy` 中释放。每个注册和配置授权分别管理生命周期，物品在至少一项授权有效时保持准入。
 
@@ -46,7 +46,7 @@ API 通过工厂的 `entityPool` 定位目标，调用方传入正数的 **实�
 
 ## 选择内置内容
 
-默认安装包含流体管道、阀门、配方、科技解锁和建造栏入口。Fluid Pipes 0.8.0 提供 `PipeApi.DisableBuiltInItems()`，供采用自有物品体系的扩展在进程初始化时关闭这组内容：
+默认安装包含流体管道、阀门、配方、科技解锁和建造栏入口。采用自有物品体系的扩展可通过 `PipeApi.DisableBuiltInItems()` 在进程初始化时关闭这组内容：
 
 ```csharp
 using BepInEx;
@@ -54,7 +54,7 @@ using FluidPipes.API;
 using xiaoye97;
 
 [BepInPlugin("example.custompipes", "Custom Pipes", "1.0.0")]
-[BepInDependency(PipeApi.PluginGuid, "0.11.0")]
+[BepInDependency(PipeApi.PluginGuid, PipeApi.ModVersion)]
 public sealed class CustomPipesPlugin : BaseUnityPlugin
 {
     private void Awake()
@@ -86,7 +86,7 @@ public sealed class CustomPipesPlugin : BaseUnityPlugin
 
 内容选择属于整个进程的配置，多个插件共享同一状态。每个存档应保持稳定的内容集合：含内置管道或阀门的存档继续启用内置内容；采用自有物品体系的存档保持相应扩展及其注册设置。存档中的实体和库存由已安装的对应物品定义解释。
 
-## 类型与拓扑查询（0.11.0 起）
+## 类型与拓扑查询
 
 `PipeTypeDefinition.CreateSharedInventory` 定义普通共享库存管道；`CreateStructure` 定义由扩展维护运行逻辑的连接结构。两者校验类型参数并返回可交给 `PipeTypes.Register` 的定义。`CreateStructure` 通过 `constructionMode:` 选择建造模式。已有原型可直接绑定，不必通过 `CreateItem` 重建名称、配方或科技。完整注册时序、参数和结构示例见 [类型与外观扩展](PIPE_TYPES.md)。
 
@@ -176,7 +176,7 @@ if (PipeApi.TryTake(factory, pipeEntityId, 4, out var taken, filterItemId: 1000)
 
 管道与普通传送带间通过分拣器转移物品。连接检查会拒绝两者直接相接，也会拒绝管道接入分流器、集装机、喷涂机和流量监测器。依赖 mod 的自定义建筑通过 `PipeApi` 存取已解析的管道端点。
 
-共享库存 API 覆盖单工厂内的管道、储液罐、物流塔和阀门。`PipeTypes` 注册独立管道原型，并复用库的建造、交互和输送接口。自定义容器注册、跨工厂连接、原子跨空间转移、程序化建造接口和多人同步协议属于额外的接口扩展。
+共享库存 API 覆盖单工厂内的管道、储液罐、物流塔和阀门。`PipeTypes` 注册独立管道原型，并复用库的建造、交互和输送接口。公共 API 不提供自定义容器注册、跨工厂连接、原子跨空间转移、程序化建造或多人同步。
 
 ## 阀门
 
@@ -194,7 +194,7 @@ PipeApi.TrySetValveOptions(factory, valveEntityId, settings);
 
 阀门保持两侧空间独立，按库存、容量、方向、液位目标和可用电力转移。额定泵送功率约 100 kW；供电不足时按比例限速，供电为零时停止。两侧通过其它路径连通时，阀门停止转移。泵送前会执行物品准入检查，被禁止的物品继续保存在源库存中。
 
-## 机器直连接口（0.5.0 起）
+## 机器直连接口
 
 `PipeApi.MachinePortsEnabled` 反映配置开关。生产建筑通过原生 `AssemblerComponent` 和分拣器插槽接入，机器的原料、产物缓存由原生逻辑管理。原生输送口建筑继续使用对应的输送口集成。
 
@@ -222,6 +222,6 @@ PipeApi.TryDisconnectMachinePort(factory, machineEntityId, slotIndex);
 
 稳定的管段存取通过索引访问所属连通分量的库存。共享容器操作遍历相关储存单元；拓扑改变或准入注册变化后，下一次查询可能重建容器索引。完整快照按连接的容器和管道连通分量汇总。原生容器可被其它游戏系统修改，缓存查询在模拟 tick 中协调；需要事务一致性的调用应使用上文约定的工厂独占执行上下文。
 
-Fluid Pipes 负责自己的 DSPModSave 数据；依赖 mod 保存自身状态及其可重新解析的端点信息。当前写入存档格式 6，读取格式 1–6。接口记录保存机器与管道的原生槽位、方向、物品筛选、启停状态和在途物品。读取早期格式时，机器接口集合为空。格式 6 增加沙盒永续管的模式、接口侧、流体和目标液位；早期阀门记录使用普通泵送模式。公开的 `ValveOptions` 配置普通泵送参数，沙盒调节参数通过游戏内阀门面板管理。
+Fluid Pipes 负责自己的 DSPModSave 数据；依赖 mod 保存自身状态及其可重新解析的端点信息。库写入存档格式 6，支持读取格式 1–6。机器接口记录保存原生槽位、方向、物品筛选、启停状态和在途物品；阀门记录保存泵送设置及沙盒调节模式、接口侧、流体和目标液位。公开的 `ValveOptions` 配置普通泵送参数，沙盒调节参数通过游戏内阀门面板管理。
 
-每个管道节点贡献 10 单位容量。旧存档保留超出新容量的库存和增产点；该空间继续支持提取，新增存入受当前容量限制。`NetworkInventory.Capacity` 返回标称容量，历史超容量库存的 `FillFraction` 可以大于 1。
+每个共享库存管道节点贡献 10 单位容量。加载时保留超出标称容量的库存和增产点；该空间继续支持提取，新增存入受当前容量限制。`NetworkInventory.Capacity` 返回标称容量，超容量库存的 `FillFraction` 可以大于 1。

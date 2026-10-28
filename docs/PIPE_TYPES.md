@@ -2,7 +2,7 @@
 
 扩展通过 `FluidPipes.API.PipeTypes` 将自己的 `ItemProto` 注册为管道类型。默认安装包含管道和阀门；采用自有物品体系的扩展可在 `Awake` 中调用 `PipeApi.DisableBuiltInItems()` 选择外部内容。
 
-Fluid Pipes 0.11.0 提供 API v2。类型通过 `PipeTypeDefinition.CreateSharedInventory` 或 `CreateStructure` 定义；拓扑查询支持独立数组、可复用列表和工厂拓扑版本。扩展声明 `[BepInDependency(PipeApi.PluginGuid, "0.11.0")]`。
+类型通过 `PipeTypeDefinition.CreateSharedInventory` 或 `CreateStructure` 定义；拓扑查询支持独立数组、可复用列表和工厂拓扑版本。扩展声明 `[BepInDependency(PipeApi.PluginGuid, PipeApi.ModVersion)]`，确保依赖版本与编译时引用的程序集一致。
 
 ## API 边界
 
@@ -59,7 +59,7 @@ PipeTypes.Register(
 | `PipeDirectionMode` | `Directed` | 原生连接槽保存输入和输出，原生 `CargoPath` 维护方向与闭环；沿用原生传送带的输出数及路径约束 |
 | `PipeAppearance` | 材质和效果回调 | 管壁、接头、内芯和机器接口的材质；区块级动画参数；连续纵向纹理坐标 |
 | `PipeGeometryProfile` | 管径、中心高度和管箍尺寸 | 按类型生成管壁、接头与可选支撑环，单位为 Unity 世界单位 |
-| `PipeInteriorProfile` | 纵向金属梁和导体截面 | 为结构类型配置沿实际路径延伸的圆形或圆角矩形构件 |
+| `PipeInteriorProfile` | 纵向金属梁和导体截面 | 为结构类型配置沿实际路径延伸的圆形、圆环或圆角矩形构件 |
 
 连接两端的 `Behavior`、`DirectionMode` 和 `ConnectionFamily` 必须一致。共享库存类型的默认家族为 `fluidpipes:inventory`；结构类型默认使用自己的完整类型键。扩展可指定相同家族，使不同外观的同类组件互连。
 
@@ -89,9 +89,13 @@ PipeTypes.Register("example.transport", definition);
 
 类型键为 `ownerGuid + ":" + localName`。局部名称使用小写 ASCII 字母、数字、点、下划线或连字符。`PipeTypeInfo` 返回键、所属插件、实际物品 ID、行为、方向、连接家族、`Geometry`、`Appearance` 和 `ConstructionMode`。`Geometry` 和 `Appearance` 是已注册的只读配置引用；省略外观时 `Appearance` 可以为 `null`。
 
+## 原生传送带建造
+
+外部模拟的结构类型通过 `CreateStructure` 的 `directionMode: PipeDirectionMode.Directed` 和 `constructionMode: PipeConstructionMode.NativeBelt` 参数选择原生传送带建造。此模式使用原生传送带的规划、端口迁移、占位和碰撞检查；程序化渲染继续使用类型的几何、外观、缓存和 LOD。普通共享库存管道使用 `PipeConstructionMode.Pipe`。
+
 ## 原型注册
 
-使用本文命名工厂的扩展声明 `[BepInDependency(PipeApi.PluginGuid, "0.11.0")]`。库的 `Awake` 先订阅 LDBTool，扩展随后订阅自己的原型处理器。
+通过 BepInEx 依赖声明保证加载顺序：库的 `Awake` 先订阅 LDBTool，扩展随后订阅自己的原型处理器。
 
 项目引用的 `FluidPipes.dll` 使用 `<Private>false</Private>`，发布包携带扩展自己的 DLL 和资源；运行时由已安装的 Fluid Pipes 提供公共程序集。完整独立项目见 [CopperPipes](../examples/CopperPipes/CopperPipes.csproj)。
 
@@ -157,6 +161,8 @@ private int ReadNeighbors(PlanetFactory factory, int entityId)
 
 尺寸可表达结构梁、电缆护套和加宽管道。扩展应根据完整接头外径和中心偏移检查建筑间距、上下层净空及曲线连接。自定义吸附和放置规则由原型所属扩展维护。
 
+五个尺寸参数均可省略。`isolatedHalfLength` 只控制孤立节点的模型纵向半长度；已连接节点的长度由实际连接端点确定。
+
 ## 内部纵向构件
 
 `PipeAppearance.interior` 接收不可变的 `PipeInteriorProfile`，适用于 `PipeBehavior.Structure`。配置截面后，`HasCore` 自动为 `true`。省略 `interior` 时，`hasCore` 和 `coreRadiusFraction` 继续控制单个同轴内芯。`PipeWallMode.Open` 用于带有内部截面的结构类型，只绘制可见构件；选择描边同时覆盖金属梁和导体，碰撞保留 `PipeGeometryProfile` 的外部包络。
@@ -167,9 +173,10 @@ private int ReadNeighbors(PlanetFactory factory, int entityId)
 | --- | --- |
 | `offset` | 有限的 `Vector2`，相对于外管壁半径；端面 X 沿路径切线与行星径向上方向的叉积，Y 沿径向上方向在截面内的投影 |
 | `PipeInteriorSection.Circle(radiusFraction)` | 圆形半径与外管壁半径之比，范围 `[0.01, 0.85]` |
+| `PipeInteriorSection.Annulus(outerRadiusFraction, innerRadiusFraction)` | 外半径比例为 `[0.02, 0.85]`；内半径比例至少为 `0.01`，且严格小于外半径 |
 | `PipeInteriorSection.RoundedRectangle(widthFraction, heightFraction, bevelFraction)` | 矩形全宽、全高各为 `[0.02, 1.7]`；圆角半径为 `[0, min(width, height) / 2]`，均相对于外管壁半径 |
 | 截面包络 | `offset.magnitude + section.RadiusFraction < 0.9`；矩形采用半对角线作为保守包围半径 |
-| `surface` | `Core` 使用导体材质和效果；`Fittings` 使用金属接头材质和效果 |
+| `surface` | `Core` 使用导体材质和效果；`Fittings` 使用金属接头材质和效果；`Detail` 使用独立附件材质和效果 |
 
 例如，外部包络半径为 1.0 的开敞结构可配置两侧箱梁、底板和中央导体：
 
@@ -196,15 +203,67 @@ PipeTypes.Register("example.transport", definition);
 
 `Directed` 类型允许非对称截面，构件沿原生输入到输出的方向排列。`Undirected` 类型要求 `(x, y)` 与 `(-x, y)` 成员一一匹配，截面种类、全宽、全高、圆角及表面角色均相同；重复成员也需要对应数量的镜像，X 为零的成员与自身匹配。路径反向会翻转横向 X，径向 Y 保持朝外，因此单独底板和左右箱梁可以组成上下有区别的 U 形截面。构造类型定义时校验这一约束，共享端面按相同框架对接。
 
-内构件沿真实中心线路径生成，偏移使用共享端面的切线与径向框架，球面相邻管段的截面位置保持连续。分支节点为每个连接臂生成一段构件。几何随节点形状缓存，并按类型及语义区块合并；拓扑或类型变化使相关缓存失效。动画与供电效果通过材质参数更新。内部网格的子网格 0 使用 `Core`，子网格 1 使用 `Fittings`。
+内构件沿真实中心线路径生成，偏移使用共享端面的切线与径向框架，球面相邻管段的截面位置保持连续。分支节点为每个连接臂生成一段构件。几何随节点形状缓存，并按类型及语义区块合并；拓扑或类型变化使相关缓存失效。动画与供电效果通过材质参数更新。不同表面角色使用独立子网格。
 
 圆角矩形构件沿路径扫掠，圆角与平面侧壁共同构成纵梁，独立端点使用平面封口。开敞截面可通过两侧箱梁、底板与导体组合保留中央通道。各类结构使用自身外半径缩放同一份归一化截面。
+
+`PipeAppearance.wallRadiusFraction` 控制结构类型的可见外管壁半径与几何包络半径之比，范围为 0.1 到 1，默认值为 1。该设置与 `PipeInteriorProfile` 配合使用：透明束流腔可以占包络的 66%，空心加速器套环占 70% 到 84%，形成套在腔体外侧的设施。构件尺寸、碰撞和类型的几何包络继续使用完整半径。
+
+`PipeInteriorSection.Rotated(degrees)` 返回旋转后的不可变截面。矩形按 180 度周期归一化，圆形和圆环保持旋转对称。它可将细矩形肋条沿圆形管壁的径向排列。无向截面的镜像构件使用互为相反数的旋转角度，构件的中心偏移保持横向镜像。
+
+结构截面构件可选择 `PipeSurfaceRole.Detail`，通过 `PipeMaterialSet.Detail` 配置独立的附件材质。该角色适用于线圈、绝缘套节和设备模块；它参与绘制效果回调，并具有独立的子网格和不透明阴影。网格顶点提供白色颜色属性，粒子类材质可在着色器中使用顶点颜色调制纹理。
+
+### 周期性构件
+
+`PipeInteriorMember` 的四参数构造函数接收 `PipeInteriorPattern`。模式使用中心线世界位置计算相位，并在关键帧之间线性改变径向偏移和截面倍率。斜撑可以用上下往复的径向偏移定义；周期支架可以用零与一之间的截面倍率定义。
+
+```csharp
+var diagonal = new PipeInteriorPattern(
+    (factory, position) => position.z / 4f,
+    new[]
+    {
+        new PipeInteriorKeyframe(0, -0.30f),
+        new PipeInteriorKeyframe(0.5f, 0.30f),
+        new PipeInteriorKeyframe(1, -0.30f),
+    }
+);
+var brace = new PipeInteriorMember(
+    new Vector2(0.5f, 0),
+    PipeInteriorSection.RoundedRectangle(0.075f, 0.085f, 0.015f),
+    PipeSurfaceRole.Fittings,
+    diagonal
+);
+```
+
+此示例沿世界 Z 轴每四单位重复。曲线路径的回调使用路径自己的连续长度坐标。相邻采样点的相位跨度保持小于半个周期，相同的世界位置保持相同的相位。网格只在经过的关键帧处补充截面；周期边界独立于建造节点。零倍率在构件中心收拢实心截面。`PipeInteriorSection.Annulus(outerRadiusFraction, innerRadiusFraction)` 提供内外周界；其周期倍率改变壁厚，内孔半径保持固定。圆环的零壁厚区段省略表面，用于形成分隔的加速器套环。每个关键帧的偏移和缩放后的周界均位于半径 0.9 的归一化包络内。无向截面的镜像构件共享同一个模式实例。
+
+`PipeInteriorPattern.WithTextureWindow(startPhase, phaseSpan)` 将整张纵向纹理展开到周期内的局部区间。例如 `WithTextureWindow(-0.05f, 0.10f)` 把相位零附近的十分之一个周期映射为 V = 0 到 1。它用于稀疏套节和设备机匣，使纹理分辨率集中于可见表面。跨周期的窗口保持连续；材质的纵向 UV 倍率设为一。省略此窗口时，构件沿用外观的世界纹理坐标。
+
+## 管壁表面分区
+
+`PipeAppearance.wallLayout` 接收不可变的 `PipeWallLayout`，并使用 `Glass` 管壁模式。`PipeWallBand` 描述中心角、水平角宽、竖直角宽与材质角色。`Wall` 使用透明管壁材质，`Fittings` 使用不透明材质；默认背景为 `Fittings`，后面的重叠带覆盖前面的带。
+
+```csharp
+var layout = new PipeWallLayout(new[]
+{
+    new PipeWallBand(centerDegrees: 0, widthDegrees: 90),
+    new PipeWallBand(centerDegrees: 180, widthDegrees: 0, verticalWidthDegrees: 90),
+});
+```
+
+角宽范围为 0–360 度，集合支持 1–16 个表面带。默认在 60–80 度仰角范围内平滑切换水平和竖直角宽。水平截面以径向上方为参考；竖直截面使用行星北向，极点采用备用参考轴。无向类型使用中心角为 0 或 180 度的带，或相邻排列、宽度与材质一致的镜像对，以保持正反建造时的外观一致。
+
+分区使用 32 边截面的网格面采样。金属与玻璃分配到独立子网格，分别使用不透明和透明绘制；金属接头和封口维持不透明。渲染缓存按空间区块与类型分组。
+
+`wallLayout` 是 `PipeAppearance` 构造器的可选参数，可与材质、纹理坐标和受影设置一起配置。
 
 ## 材质、纹理与动画
 
 `PipeAppearance` 在构造时固定以下设置：
 
 - `wallMode`：`Glass` 使用透明内外壁，`Opaque` 使用写入深度的实体管壁；`Open` 绘制带内部截面的结构类型。
+- `wallLayout`：可选的角向管壁分区，适用于 `Glass` 模式，详见[管壁表面分区](#管壁表面分区)。
+- `wallRadiusFraction`：可见管壁与几何包络的半径比，范围为 `[0.1, 1]`；小于 1 时需要配置 `interior`。
 - `configureMaterials`：每轮资源初始化时配置库创建的材质副本。
 - `hasCore`、`coreRadiusFraction`：结构类型的装饰内芯，半径比例范围为 `(0, 0.85]`。
 - `interior`：结构类型的多构件截面；配置后使用各成员的偏移、半径和表面角色生成内部几何。
@@ -240,7 +299,7 @@ var appearance = new PipeAppearance(
 
 纹理坐标回调保证接收非空工厂，并返回有限坐标。省略回调时使用局部弧长；没有工厂的内部几何预览也使用局部弧长，不调用回调。异常或 `NaN`、无穷值会记录诊断并停用该类型的坐标回调。回调只读取布局，不在网格采样中改变游戏状态。
 
-`PipeMaterialSet` 提供 `Wall`、`Fittings`、`Core`、`MachinePanel` 和 `MachineShell`。`SetMaterial` 将自有 Shader 的材质复制到角色。`InnerWall` 在配置结束后从管壁派生。自有 Shader 应支持相应渲染类别和普通网格顶点、法线及 UV。
+`PipeMaterialSet` 提供 `Wall`、`Fittings`、`Core`、`Detail`、`MachinePanel` 和 `MachineShell`。`SetMaterial` 将自有 Shader 的材质复制到角色。`InnerWall` 在配置结束后从管壁派生。自有 Shader 应支持相应渲染类别和普通网格顶点、法线及 UV。
 
 库创建和销毁材质副本；共享的纹理、Shader 和 AssetBundle 由扩展保持有效。`SetMaterial` 的源材质归调用方所有，完成复制后可释放临时源材质。材质引用的纹理和 Shader 继续覆盖整个绘制生命周期，扩展在最后一次绘制结束后释放这些资源。配置异常或 Shader 校验失败时释放该次副本，使用默认材质并记录诊断。绘制回调异常按类型隔离。
 
@@ -260,68 +319,6 @@ var appearance = new PipeAppearance(
 
 运行时存档格式为 6，读取格式 1–6。原生存档保存物品 ID、建筑、待建对象和有向连接槽；Mod 数据保存无向连接、共享库存、阀门和机器接口。渲染资源由注册定义重建。
 
-扩展负责维持物品 ID 和类型语义稳定，并在加载相应存档时安装所需依赖。当前格式通过原生物品 ID 恢复类型；跨 ID 迁移需要同时覆盖原生建筑、背包、待建对象和 Mod 数据。独立的类型归属清单属于后续存档格式扩展。
+扩展负责维持物品 ID 和类型语义稳定，并在加载相应存档时安装所需依赖。存档通过原生物品 ID 恢复类型；跨 ID 迁移需要同时覆盖原生建筑、背包、待建对象和 Mod 数据。
 
-有向节点在读档后从原生槽恢复弱连通查询，无向节点从保存的连接恢复。历史默认管段的超容量库存继续保留并允许提取。材质、纹理和几何配置按已注册的 API v2 类型定义重建。
-
-## 管壁表面分区
-
-`PipeAppearance.wallLayout` 接收不可变的 `PipeWallLayout`，并使用 `Glass` 管壁模式。`PipeWallBand` 描述中心角、水平角宽、竖直角宽与材质角色。`Wall` 使用透明管壁材质，`Fittings` 使用不透明材质；默认背景为 `Fittings`，后面的重叠带覆盖前面的带。
-
-```csharp
-var layout = new PipeWallLayout(new[]
-{
-    new PipeWallBand(centerDegrees: 0, widthDegrees: 90),
-    new PipeWallBand(centerDegrees: 180, widthDegrees: 0, verticalWidthDegrees: 90),
-});
-```
-
-角宽范围为0–360度，集合支持1–16个表面带。默认在60–80度仰角范围内平滑切换水平和竖直角宽。水平截面以径向上方为参考；竖直截面使用行星北向，极点采用备用参考轴。无向类型使用中心角为0或180度的带，或相邻排列、宽度与材质一致的镜像对，以保持正反建造时的外观一致。
-
-分区使用32边截面的网格面采样。铜壳与玻璃分配到独立子网格，分别使用不透明和透明绘制；金属接头和封口维持不透明。渲染缓存沿用原有的空间区块与类型分组。
-
-`wallLayout` 是 `PipeAppearance` 构造器的可选参数，可与材质、纹理坐标和受影设置一起配置。
-
-
-### 周期性构件
-
-`PipeInteriorMember` 的四参数构造函数接收 `PipeInteriorPattern`。模式使用中心线世界位置计算相位，并在关键帧之间线性改变径向偏移和截面倍率。斜撑可以用上下往复的径向偏移定义；周期支架可以用零与一之间的截面倍率定义。
-
-```csharp
-var diagonal = new PipeInteriorPattern(
-    (factory, position) => position.z / 4f,
-    new[]
-    {
-        new PipeInteriorKeyframe(0, -0.30f),
-        new PipeInteriorKeyframe(0.5f, 0.30f),
-        new PipeInteriorKeyframe(1, -0.30f),
-    }
-);
-var brace = new PipeInteriorMember(
-    new Vector2(0.5f, 0),
-    PipeInteriorSection.RoundedRectangle(0.075f, 0.085f, 0.015f),
-    PipeSurfaceRole.Fittings,
-    diagonal
-);
-```
-
-此示例沿世界 Z 轴每四单位重复。曲线路径的回调使用路径自己的连续长度坐标。相邻采样点的相位跨度保持小于半个周期，相同的世界位置保持相同的相位。网格只在经过的关键帧处补充截面；周期边界独立于建造节点。零倍率在构件中心收拢实心截面。`PipeInteriorSection.Annulus(outerRadiusFraction, innerRadiusFraction)` 提供内外周界；其周期倍率改变壁厚，内孔半径保持固定。圆环的零壁厚区段省略表面，用于形成分隔的加速器套环。每个关键帧的偏移和缩放后的周界均位于半径 0.9 的归一化包络内。无向截面的镜像构件共享同一个模式实例。
-
-
-`PipeAppearance.wallRadiusFraction` 控制结构类型的可见外管壁半径与几何包络半径之比，范围为 0.1 到 1，默认值为 1。该设置与 `PipeInteriorProfile` 配合使用：透明束流腔可以占包络的 66%，空心加速器套环占 70% 到 84%，形成套在腔体外侧的设施。构件尺寸、碰撞和类型的几何包络继续使用完整半径。
-
-
-`PipeInteriorSection.Rotated(degrees)` 返回旋转后的不可变截面。矩形按 180 度周期归一化，圆形和圆环保持旋转对称。它可将细矩形肋条沿圆形管壁的径向排列。无向截面的镜像构件使用互为相反数的旋转角度，构件的中心偏移保持横向镜像。
-
-
-结构截面构件可选择 `PipeSurfaceRole.Detail`，通过 `PipeMaterialSet.Detail` 配置独立的附件材质。该角色适用于线圈、绝缘套节和设备模块；它参与绘制效果回调，并具有独立的子网格和不透明阴影。网格顶点提供白色颜色属性，粒子类材质可在着色器中使用顶点颜色调制纹理。
-
-
-`PipeInteriorPattern.WithTextureWindow(startPhase, phaseSpan)` 将整张纵向纹理展开到周期内的局部区间。例如 `WithTextureWindow(-0.05f, 0.10f)` 把相位零附近的十分之一个周期映射为 V = 0 到 1。它用于稀疏套节和设备机匣，使纹理分辨率集中于可见表面。跨周期的窗口保持连续；材质的纵向 UV 倍率设为一。省略此窗口时，构件沿用外观的世界纹理坐标。
-
-
-## 原生传送带建造
-
-外部模拟的结构类型通过 `CreateStructure` 的 `directionMode: PipeDirectionMode.Directed` 和 `constructionMode: PipeConstructionMode.NativeBelt` 参数选择原生传送带建造。此模式使用原生传送带的规划、端口迁移、占位和碰撞检查；程序化渲染继续使用类型的几何、外观、缓存和 LOD。普通共享库存管道使用 `PipeConstructionMode.Pipe`。
-
-`PipeGeometryProfile` 使用一个构造器，五个参数均可省略。`isolatedHalfLength` 只控制孤立节点的模型纵向半长度，默认 `null` 时按半径同比例计算。已连接节点的长度由实际连接端点确定。
+有向节点在读档后从原生槽恢复弱连通查询，无向节点从保存的连接恢复。超出标称容量的库存继续保留并允许提取。材质、纹理和几何配置按已注册的类型定义重建。

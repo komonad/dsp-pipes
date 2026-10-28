@@ -4,6 +4,8 @@
 
 ## 本地构建
 
+以下命令在仓库根目录执行。依赖 profile 需安装 BepInEx、CommonAPI、LDBTool、DSPModSave 及其依赖；运行时测试脚本还会复制 profile 中的 NebulaMultiplayerModApi。
+
 将 `Local.props.example` 复制为 `Local.props`。把 `Managed` 设为已安装游戏的管理程序集目录，把 `BepInExCore` 设为依赖 profile 的 BepInEx 核心目录。原生运行时夹具还会使用由 `GameAssembly` 选择的公有化（publicized）程序集；正式插件引用未修改的游戏程序集。
 
 插件目标框架为 .NET Framework 4.7.2 和 C# 7.3。需要 .NET SDK、框架引用程序集和 PowerShell 7。独立核心检查的目标框架为 .NET 8。
@@ -17,7 +19,7 @@ pwsh -NoProfile -File tests/run.ps1
 dotnet build tests/SceneCapture.csproj -c Release
 ```
 
-`bin/Release/FluidPipes.dll` 是运行时插件。与其同目录的 `FluidPipes.xml` 为 API 使用方提供 IDE 文档。库存使用方示例编译为 `PipeConsumer.dll`。材质扩展编译为 `CopperPipes.dll`；它通过公开 API 注册独立物品和配方。若要针对已发布的 DLL 构建，设置其 `FluidPipesAssemblyPath` 属性。
+`bin/Release/FluidPipes.dll` 是运行时插件。与其同目录的 `FluidPipes.xml` 为 API 使用方提供 IDE 文档。库存使用方示例编译为 `PipeConsumer.dll`。材质扩展编译为 `CopperPipes.dll`；它通过公开 API 注册独立物品和配方。设置 CopperPipes 项目的 `FluidPipesAssemblyPath` 属性可指定要引用的 DLL。
 
 ## 验证
 
@@ -36,7 +38,7 @@ pwsh -NoProfile -File tests/capture-scene.ps1 -ParallelLine -InspectSave samples
 
 并行夹具包含三座塑料化工厂、沙盒源/汇物流塔以及并行的管道/传送带通道。它检查稳定生产、数量守恒、管道到传送带的分拣器转移和原生建造栏选择。其它测试装置模式覆盖几何、连接模式、立方体管网、阀门交互和分拣器外观。
 
-性能报告会为每项结果标明运行时、工作负载和所测量的 CPU 阶段。交互式帧率评估需要完整加载的工厂和帧级测量。验证环境的分配计数器对已知分配报告为零，因此当前检查将其归类为不可用，并单独校验物理货物数量。参见[测量数据](../tests/PERFORMANCE.md)。
+性能报告标明运行时、工作负载和所测量的 CPU 阶段。交互式帧率评估需要完整加载的工厂和帧级测量。运行时检查先通过已知分配验证分配计数器；验证失败时标记为不可用，物理货物数量另行校验。参见[性能测量](../tests/PERFORMANCE.md)。
 
 OrbitalRing 兼容性测试装置会把已安装 OrbitalRing profile 中的核心文件、预加载器和所需插件复制到 `obj/orbitalring-checks/` 下的全新目录。它启动带隔离文档/存档目录的隐藏沙盒。需显式选择源 profile：
 
@@ -46,11 +48,11 @@ pwsh -NoProfile -File tests/run-orbitalring.ps1 -SourceProfile C:/path/to/Orbita
 pwsh -NoProfile -File tests/run-orbitalring.ps1 -SourceProfile C:/path/to/OrbitalRing-profile -Vanilla
 ```
 
-每个供给用例会同步步进 `FactoryStorage.GameTickTank` 600 次，相当于以每秒 60 tick 运行十秒。夹具通过原生库存窗口激活一个无限储液罐，接入真实管道或蓝色传送带，并记录提取总量和储液罐内容。断言覆盖 300 物品的持续输出、带缓冲的背压、预填充库存、独立的源容量、激活状态保持、源切换、混合流体拒绝、有限数量/点数守恒、通过管道输入激活，以及多个源共享同一节点时的独立速率。无限制输出端口探针每 tick 清空蓝色传送带缓冲区，以验证原生插入尝试；原生传送带吞吐需要推进传送带模拟。`orbitalring-results.txt` 记录加载的版本和每项测量结果；`Completed=1` 表示所有断言通过。
+供给用例通过原生库存窗口激活无限储液罐，验证持续输出、背压、独立计速、输入激活、混液限制与库存守恒。每个用例同步步进 `FactoryStorage.GameTickTank` 600 次，以 60 tick/s 计算应输出 300 物品。输出端口探针每 tick 清空蓝色传送带缓冲区；该探针测量原生插入尝试，传送带吞吐测量还需推进传送带模拟。`orbitalring-results.txt` 记录加载版本与测量结果；`Completed=1` 表示所有断言通过。
 
 建造用例使用原生路径判定、建造条件、待建放置和完成逻辑。水平路径和高架路径以相反顺序完成；每次完成都会检查相邻且互为对应的原生插槽，完成后的路径支持远程库存提取。原版（vanilla）模式不加载 OrbitalRing，运行相同的建造用例。BuildBarTool 模式还会校验运输分类上排的两个物品绑定。
 
-机器直连夹具在全新的隐藏沙盒中以 `Integration.EnableMachinePorts=true` 运行。它覆盖多液体硫酸生产、带类型的原生 I/O、需求限制、背压、预留、配方变化和持久化。原生建造针对旋转后的小数插槽坐标双向运行。原生储液罐指针手势校验共享存取以及储液罐/管网的独立清空。检视器校验覆盖原生排版、内边距、当前/相邻节点轮廓和稳定的描边缓存。沙盒阀门用例覆盖全部三种液位模式、隔离侧选择、流体冲突、按比例移除增产点、沙盒门控和设置序列化。它会在 `obj/machine-port-checks/` 下写出十三张截图和一份报告，并复制到 `screenshots/machine-ports/`。
+机器直连夹具在独立隐藏沙盒中启用 `Integration.EnableMachinePorts`，验证硫酸生产的多液体隔离、原生 I/O、需求限制、背压、预留、配方变化、建造与持久化。同一夹具检查库存窗口的共享存取和清空、节点描边，以及沙盒阀门的液位模式、侧选择与增产点守恒。截图和报告写入 `obj/machine-port-checks/` 并复制到 `screenshots/machine-ports/`；`-InspectSave` 验证指定存档的重载。
 
 ```powershell
 pwsh -NoProfile -File tests/run-machine-ports.ps1
@@ -63,7 +65,7 @@ pwsh -NoProfile -File tests/run-machine-ports.ps1 -InspectSave C:/path/to/machin
 
 格式使用固定版本的本地 CSharpier 工具和 `.csharpierrc.json`。通过 `dotnet tool restore` 还原，运行 `dotnet csharpier format .` 执行格式化，运行 `dotnet csharpier check .` 校验。使用显式大括号，每条语句只声明一个变量。玩法变量按其在领域中的角色命名；几何相关变量可使用常规坐标记法。Harmony 钩子的参数名遵循原生签名，因为 Harmony 按名称绑定这些参数。
 
-对外门面应保持独立于 Harmony 补丁类。新增物品的插入路径在共享库存边界执行准入。对于普通传送带目标，货运钩子将控制权交回原生方法。存储和拓扑变更保持存档兼容性和守恒检查。
+对外门面独立于 Harmony 补丁类。物品插入路径在共享库存边界执行准入。对于普通传送带目标，货运钩子将控制权交回原生方法。存储和拓扑变更需要验证序列化、重载与库存守恒。
 
 ## 文档与注释语言
 

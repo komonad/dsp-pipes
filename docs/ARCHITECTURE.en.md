@@ -24,13 +24,15 @@ The library owns generic transport, connection topology, local cross-sections an
 
 ## Inventory invariants
 
-`PipeGraph` owns each pure pipe component's item count and proliferator points. `PipePools` reads and writes the authoritative native tank and station fields. A shared space may contain multiple graph components joined by native reservoirs. External callers receive detached inventory and settings values.
+`PipeGraph` owns each pure pipe component's item count and proliferator points. Each completed pipe node contributes 10 units of capacity. `PipePools` reads and writes the authoritative native tank and station fields. A shared space may contain multiple graph components joined by native reservoirs. External callers receive detached inventory and settings values.
 
 Every space has one item identity, including any fixed station-slot filter. Connections reject incompatible identities. Reservoir conflicts suspend balancing and inventory operations while preserving stock. Native tanks enforce their fluid-only storage type after the global item-admission check.
 
 Item admission is an immutable set published after prototype initialization and registration changes. Explicit configuration exclusions take precedence over all grants. Registration ownership is independent: releasing one grant preserves overlapping grants. Pool caches track both graph topology and policy versions. Revocation blocks insertion; extraction remains available for retained stock.
 
 Storage arithmetic preserves integer counts and total proliferator points. Insertion validates capacity before committing the full transfer. Shared-reservoir insertion records modified stores; a partial write triggers restoration of those stores and rejection of the batch. Native cargo adaptation supports partial acceptance with proportional point accounting.
+
+Imported inventories above capacity retain their item counts and proliferator points and remain available for extraction. Shared balancing waits until the combined capacity can accommodate the stock; insertion resumes as withdrawals create space. Inventory replacement can only preserve or reduce the surplus.
 
 OrbitalRing infinite tanks own their inventory and activation sentinel independently. The optional compatibility module resolves the prototype and transfer method from the loaded plugin, then keeps these tanks outside shared-reservoir reconciliation. Native input and activation remain authoritative. Pipe output follows a two-tick cadence for 30 items/s; blocked output accrues no transfer credit. Cadence state follows the cargo-path lifetime through weak references. Ordinary belt calls retain native behavior.
 
@@ -69,5 +71,3 @@ Rendering caches geometry independently of inventory. Fluid presence and item id
 ## Verification
 
 `tests/CoreSuite.cs` exercises connectivity, conservation, randomized operations, concurrent core I/O and admission-set rules. `tests/ApiChecks.cs` exercises the public contract and verifies XML documentation for every exported API type, member and parameter. Native runtime fixtures test cargo hooks, containers, valves, placement and inserters. The example consumer builds as its own assembly.
-
-Each completed pipe node contributes 10 units of capacity. Graph format 1 accepts historical inventories up to the former 100-unit per-node limit. Imported surplus retains its stock and proliferator points; shared balancing waits until the combined capacity can accommodate it, and admission resumes as withdrawals create space. Inventory replacement preserves or reduces surplus.

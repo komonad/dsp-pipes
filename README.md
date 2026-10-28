@@ -1,80 +1,67 @@
-# Fluid Pipes 0.11.0
+# Fluid Pipes
 
-戴森球计划的无向共享库存管道 mod，同时提供供其它 mod 依赖的 API。验证游戏版本为 0.10.55.29151。
+戴森球计划的管道基础库，提供共享库存、连接拓扑、原生建造交互和程序化渲染。Mod 可以注册自己的管道物品、连接结构和外观，也可以直接使用内置的玻璃管道与阀门。
 
-文档以简体中文为主；架构、开发、渲染和性能测量提供同名的 `.en.md` 英文译本。代码注释和 XML 文档注释使用中文。
+![内置玻璃管与 CopperPipes 扩展的铜管](screenshots/pipe-copper-consumer.png)
+
+## 能做什么
+
+- **共享库存**：无向管网内立即共享同一种物品，每段管道提供 10 单位容量；储液罐和物流塔槽位可以接入同一空间。
+- **建造与交互**：拖拽铺设、升降、任意角度分支、碰撞检查、库存面板和连接管理。
+- **运输控制**：分拣器与原生输送口存取库存；阀门控制方向、速率和目标液位，沙盒模式支持永续供给与回收。
+- **扩展类型**：独立物品与配方、连接家族、有向结构、拓扑查询和变更通知。
+- **扩展外观**：管径、截面、材质、纹理坐标和动态光效；渲染器负责网格缓存、分区与细节层级。
 
 ## 安装与使用
 
-依赖 BepInEx 5、CommonAPI、LDBTool、DSPModSave。将发布包中的 `BepInEx/plugins/FluidPipes/FluidPipes.dll` 放到对应 profile，同一 profile 只保留一份插件。
+需要 BepInEx 5、CommonAPI、LDBTool 和 DSPModSave。构建或解压插件包，将 `FluidPipes.dll` 放到 profile 的 `BepInEx/plugins/FluidPipes/`，同一 profile 只保留一份 DLL。
 
-安装完成后即可研究、制造和建造管道与阀门。建筑注册、运输逻辑、渲染和交互由 Fluid Pipes 提供；其它 mod 可通过 API 扩展物品准入与存取行为，也可注册独立的管道物品、配方、尺寸、材质和动态光效。
+内置管道和阀门随储液罐的“流体储存封装”科技解锁，在建造栏的可用空位中出现。手持管道拖拽铺设，点击已建成的管段可查看、存取共享库存和断开连接。管道通过分拣器与普通传送带交换物品。阀门保持两侧空间独立，正常泵送需要约 100 kW 电力。
 
-管道和阀门随储液罐的“流体储存封装”科技解锁，制造材料、时间和批量与初级传送带相同。安装 BuildBarTool 时优先放入运输栏上排的空位；原生建造栏自动选择可用空位，通常位于储液罐所在栏的 F4/F5。
+默认只运输流体。配置文件为 `BepInEx/config/com.komonad.dsp.fluidpipes.cfg`，修改后重启游戏：
 
-- 使用原生传送带风格的拖拽、格点预览、升降和碰撞检查。管道连接无方向，支持任意角度及多个分支。
-- 每个管段提供 10 容量。连通管道、储液罐和绑定的物流塔槽位共享库存比例；同一空间始终只有一种物品。
-- 默认运输流体，也可通过配置或依赖 mod 注册其它物品。原生储液罐保持原生流体限制。
-- 点击管道使用原生储液罐的圆形控件查询、存取共享库存，也可切断单条连接或确认清空整个共享空间。当前节点沿实际模型显示绿色描边，直接相邻节点显示青蓝色描边。连接管网的储液罐可分别清空当前罐或整个液体网。
-- 普通分拣器接管道后自动显示为带原生端口的管式外观，保留等级、速率、过滤和供电行为。等级箭头随供电状态亮起，建造预览和待建虚影使用原版分拣器。管道与普通传送带之间通过分拣器转移物品，直接连接会被建造检查拒绝。
-- 阀门有两个独立空间的接口，支持限速、单向和目标液位控制。泵送约需 100 kW 电力；两侧通过其它路径连通时，阀门停止转移。
-- 沙盒阀门可切换“永续管”，选择 A/B 侧、流体与目标液位。至少模式补足目标，至多模式回收超量，精确模式同时补足和回收；调节范围覆盖所选侧的整个共享空间，并遵循物品准入与单液体规则。永续管使用沙盒供给能力，普通阀门使用电力泵送。
-- 可选的机器直连接口让管道吸附到制造台、熔炉、化工厂和精炼厂的分拣器插槽。每个接口保存方向、物品筛选和启停状态，机器按配方需求接收原料，产物按管网剩余容量输出。
+| 配置项 | 默认值 | 用途 |
+| --- | --- | --- |
+| `Integration.EnableMachinePorts` | `false` | 直接连接生产机器的分拣器插槽 |
+| `Transport.IncludeFluids` | `true` | 允许流体物品 |
+| `Transport.AllowedItemIds` | 空 | 额外允许的物品 ID |
+| `Transport.DeniedItemIds` | 空 | 禁止的物品 ID，优先于其它准入规则 |
 
-同一管网中的库存立即共享，存取速度由端点建筑决定。生产建筑保留输入、输出角色，通过原生输送口或分拣器连接管道。图标、金属接头和透明管壁由插件提供。
+原生储液罐只接受流体。更改准入规则会保留既有库存，并允许继续取出。机器直连启用后，在相连管段的“机器直连接口设置”中选择供料或提取的配方物品。完整选项和星环无尽水罐适配见[配置说明](docs/CONFIGURATION.md)。
 
-与星环（OrbitalRing 1.0.20）同用时，自动启用无尽水罐适配。无尽水罐保留独立库存和原生激活状态，通过接口以 1800/min 向管网供液；管道也可向尚在积累库存的水罐供液并触发原生激活。管网容量和清空范围覆盖实际共享容器，无尽水罐由自身界面管理。
+## 接入其它 Mod
 
-## 配置
-
-配置文件为 `BepInEx/config/com.komonad.dsp.fluidpipes.cfg`，修改后重启游戏。
-
-```ini
-[Integration]
-EnableMachinePorts = false
-
-[Transport]
-IncludeFluids = true
-AllowedItemIds = 1101, 1109
-DeniedItemIds =
-```
-
-允许列表支持额外物品，禁止列表优先于默认规则和 mod 注册。修改规则保留既有库存；未获准的物品仍可取出。F8 领取测试建筑通过 `General.EnableDebugHotkey=true` 开启，默认关闭。
-
-详见 [配置说明](docs/CONFIGURATION.md)。
-
-机器直连默认关闭。启用 `Integration.EnableMachinePorts=true` 并重启后，手持管道可直接从机器插槽向外拖拽，也可将管道末端接到机器。插槽外的接管连接实际插槽位置与格点路线。建成后点击相连管段，选择“机器直连接口设置”，在配方物品列表中选择供料或提取。唯一匹配项会自动选择；流体到达后会按物品类型重新匹配，其余多候选接口保留手动选择。关闭功能会暂停直连存取，保留连接、库存和设置。
-
-## 作为依赖库
-
-支持的外部接口集中在 `FluidPipes.API`，实现类型使用 `internal` 可见性。API v2 提供物品准入注册、实际原型 ID、共享库存查询、存取、空间身份判断、阀门设置和机器接口连接配置。类型使用命名工厂定义，拓扑查询支持独立数组与可复用列表。查询返回值快照，配置使用不可变选项。机器接口 API 自 0.5.0 起提供。
+目标框架为 .NET Framework 4.7.2。引用 `FluidPipes.dll`，设置 `Private=false`；将同目录的 `FluidPipes.xml` 放在 DLL 旁可获得 IDE 文档。插件依赖使用编译时引用的库版本：
 
 ```csharp
-[BepInDependency(PipeApi.PluginGuid, "0.4.0")]
+using BepInEx;
+using FluidPipes.API;
+
+[BepInDependency(PipeApi.PluginGuid, PipeApi.ModVersion)]
 ```
 
-编译时引用 `FluidPipes.dll` 并设置 `Private=false`。DLL 旁的 `FluidPipes.xml` 提供 IDE 文档。注册额外物品可在依赖 mod 的 `Awake` 中进行；工厂操作需等待 `PipeApi.IsReady` 并传入有效的工厂与实体 ID。
+公开接口位于 `FluidPipes.API`：
 
-- [API 接入文档](docs/API.md)：生命周期、库存语义、线程、单位、失败行为和兼容性。
-- [可编译示例](examples/PipeConsumer/ConsumerPlugin.cs)：依赖声明、授权生命周期和有界存取。
-- [铜管扩展](examples/CopperPipes/README.md)：独立插件注册铜制管道、配方和材质，与默认玻璃管共享库存。
-- [架构说明](docs/ARCHITECTURE.md)：模块边界、库存守恒、原生接口和性能约束。
-- [渲染说明](docs/RENDERING.md)：程序化建模、材质和截图场景。
-- [管道类型与外观扩展](docs/PIPE_TYPES.md)：独立原型、有向或无向连接、外部运行逻辑、材质和动画。
+| 入口 | 用途 |
+| --- | --- |
+| `PipeApi` | 物品准入、共享库存查询与存取、阀门和机器接口配置 |
+| `PipeTypes` | 类型注册、连接拓扑和变更通知 |
+| `PipeTypeDefinition`、`PipeAppearance` | 模拟行为、建造方式、几何与外观定义 |
+| `PipeRendering` | 为扩展附件提供共享金属反射参数 |
 
-API v2 的共享库存集成范围是单工厂内现有管道、储液罐、物流塔和阀门。自定义容器、多人物流同步和跨工厂管网需要进一步扩展接口。分馏塔使用原生交互路径。
+物品准入可在插件的 `Awake` 中注册；工厂操作需等待 `PipeApi.IsReady`，并使用有效的工厂和实体 ID。返回的库存是快照，存取操作需要在 Unity 主线程或独占的工厂模拟上下文中执行。
 
-## 开发与验证
+- [API 接入](docs/API.md)：生命周期、库存语义、存取、线程与失败行为。
+- [管道类型与外观](docs/PIPE_TYPES.md)：注册自有物品、共享管道和外部模拟结构。自有物品体系可在 `Awake` 中调用 `PipeApi.DisableBuiltInItems()` 关闭内置内容。
+- [PipeConsumer](examples/PipeConsumer/ConsumerPlugin.cs)：可编译的物品准入与有界存取示例。
+- [CopperPipes](examples/CopperPipes/README.md)：可编译的独立管道、配方与材质扩展。
+
+## 开发
+
+将 `Local.props.example` 复制为 `Local.props`，填写游戏程序集与 BepInEx 路径后构建：
 
 ```powershell
 dotnet build FluidPipes.csproj -c Release
-dotnet build examples/PipeConsumer/PipeConsumer.csproj -c Release
-dotnet build examples/CopperPipes/CopperPipes.csproj -c Release
-dotnet run --project tests/CoreChecks.csproj -c Release -- tests/core-results.txt
-pwsh -NoProfile -File tests/run.ps1
-pwsh -NoProfile -File package.ps1
 ```
 
-参见 [开发指南](docs/DEVELOPMENT.md)、[手动测试说明](TESTING.md) 和 [性能测量](tests/PERFORMANCE.md)。自动检查覆盖 API 文档、准入优先级、原生货运适配、库存守恒、储存容器、阀门及大图 I/O。运行时测试使用独立的后台游戏进程；交互帧率和第三方运输补丁兼容性需在实际存档中验证。
-
-发布包包含 mod DLL。示例存档、截图和测试结果位于仓库中，基础依赖通过 mod 管理器安装。
+构建、验证和打包步骤见[开发指南](docs/DEVELOPMENT.md)。内部设计见[架构](docs/ARCHITECTURE.md)和[渲染](docs/RENDERING.md)；游戏内检查见[测试说明](TESTING.md)，基准负载和测量边界见[性能测量](tests/PERFORMANCE.md)。

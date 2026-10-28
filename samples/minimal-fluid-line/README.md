@@ -12,11 +12,13 @@
 2. 将 `minimal-fluid-line.dsv` 和 `minimal-fluid-line.moddsv` 一起复制到游戏存档目录，保持同名。
 3. 加载 `minimal-fluid-line`，开启沙盒工具。玩家位于产线南侧。
 
-随附 DLL 包含管道分拣器外观。存档需要 FluidPipes、CommonAPI、LDBTool、DSPModSave 及这些插件的依赖。
+存档需要 FluidPipes、CommonAPI、LDBTool、DSPModSave 及这些插件的依赖。环境配置和手动检查见[测试说明](../../TESTING.md)。
 
 ## 验证
 
 `minimal-line-results.txt` 记录原版化工厂、分拣器、传送带、沙盒物流塔与电网的运行结果。验证覆盖三种液体隔离、满功率运行、产出与回收数量守恒，以及稳定产速。
+
+在仓库根目录运行以下命令。构建环境配置见[开发指南](../../docs/DEVELOPMENT.md)。
 
 重新生成场景：
 

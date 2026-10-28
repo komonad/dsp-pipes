@@ -6,7 +6,7 @@ namespace PipeConsumer
 {
     /// <summary>注册铁块以通过管道运输，并演示有界库存交互。</summary>
     [BepInPlugin("example.pipeconsumer", "Pipe Consumer Example", "1.0.0")]
-    [BepInDependency(PipeApi.PluginGuid, "0.4.0")]
+    [BepInDependency(PipeApi.PluginGuid, PipeApi.ModVersion)]
     public sealed class ConsumerPlugin : BaseUnityPlugin
     {
         private IDisposable registration;
