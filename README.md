@@ -2,7 +2,7 @@
 
 戴森球计划的管道基础库，提供共享库存、连接拓扑、原生建造交互和程序化渲染。Mod 可以注册自己的管道物品、连接结构和外观，也可以直接使用内置的玻璃管道与阀门。
 
-![内置玻璃管与 CopperPipes 扩展的铜管](screenshots/pipe-copper-consumer.png)
+![内置玻璃管与 CopperPipes 扩展的铜管](docs/images/pipe-copper-consumer.png)
 
 ## 能做什么
 
