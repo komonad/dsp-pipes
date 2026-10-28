@@ -22,7 +22,7 @@
 
 该场景使用 RTX 5090，1600×900 后台同步读回。整帧包含场景模拟、图像渲染与 GPU 同步；24 帧样本描述固定场景的开销。硬件、存档规模和视口分辨率会影响实际表现。三个版本的截图分别位于 `screenshots/seven-rings-lod-20261026/` 的对应子目录。
 
-原始记录：`native-belts.txt`、`lod-baseline.txt`、`lod-optimized.txt`。传送带模式可在相同运行命令后附加 `-NativeBelts`。
+原始记录：`native-belts.txt`、`lod-baseline.txt`、`lod-optimized.txt`。这些记录对应 Fluid Pipes 0.10.x 的轨道渲染测量。
 
 # 七环渲染测量
 
@@ -44,8 +44,4 @@
 
 原始记录：`baseline.txt`、`optimized.txt`。
 
-```powershell
-./tests/run-orbitalring.ps1 -SourceProfile <profile> -OrbitalPlugin <ProjectOrbitalRing.dll> -RenderProfile -SevenRings
-```
-
-`-PipePlugin` 可选择独立的 FluidPipes.dll 作为对照。`-SevenRings` 在固定 200 半径场景中建立指定的七个闭合环。近景、远景与行星视图截图与测量日志保存在该次运行的隔离目录中。
+管道与星环的兼容验证使用 `tests/run-orbitalring.ps1`，覆盖物品准入、无尽水罐和建造栏。轨道模型与七环场景的验证入口位于 OrbitalRing 仓库的 `tests/run-orbital-visuals.ps1`。本目录保存 0.10.x 渲染器的原始测量记录，用于分析版本之间的变化。

@@ -25,6 +25,8 @@ namespace FluidPipes
         private static Material adjacentUpsample;
         private static OutlineRenderer outlineRenderer;
         private static CommandBuffer adjacentCommands;
+        private static RenderTexture outlineTarget;
+        private static RenderTexture antialiasedMask;
         private static int selectedEntity;
         private static int revision;
 
@@ -95,11 +97,66 @@ namespace FluidPipes
         }
 
         [HarmonyPrefix, HarmonyPatch(typeof(OutlineRenderer), "OnPostRender")]
-        private static void EnableOutlinePass()
+        private static void EnableOutlinePass(OutlineRenderer __instance)
         {
             if (Active && Camera.current == GameCamera.main)
             {
+                outlineTarget =
+                    __instance.rtex != null && __instance.rtex.Length > 0
+                        ? __instance.rtex[0]
+                        : null;
+                PrepareMask(outlineTarget);
                 OutlineRenderer.draw = true;
+            }
+        }
+
+        private static void PrepareMask(RenderTexture target)
+        {
+            if (target == null)
+            {
+                return;
+            }
+            if (
+                antialiasedMask != null
+                && antialiasedMask.width == target.width
+                && antialiasedMask.height == target.height
+            )
+            {
+                return;
+            }
+            FreeMask();
+            var descriptor = target.descriptor;
+            descriptor.depthBufferBits = 0;
+            descriptor.msaaSamples = 4;
+            descriptor.bindMS = false;
+            descriptor.useMipMap = false;
+            descriptor.autoGenerateMips = false;
+            descriptor.msaaSamples = SystemInfo.GetRenderTextureSupportedMSAASampleCount(
+                descriptor
+            );
+            if (descriptor.msaaSamples < 2)
+            {
+                return;
+            }
+            antialiasedMask = new RenderTexture(descriptor)
+            {
+                name = "FluidPipes.AntialiasedOutlineMask",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+            };
+            if (!antialiasedMask.Create())
+            {
+                FreeMask();
+            }
+        }
+
+        private static void FreeMask()
+        {
+            if (antialiasedMask != null)
+            {
+                antialiasedMask.Release();
+                Object.Destroy(antialiasedMask);
+                antialiasedMask = null;
             }
         }
 
@@ -123,11 +180,23 @@ namespace FluidPipes
             }
             if (nodes.TryGetValue(selectedEntity, out var selected))
             {
+                if (antialiasedMask != null && outlineTarget != null)
+                {
+                    // Preserve the native mask while resolving subpixel pipe coverage before blur.
+                    commandBuffer.Blit(outlineTarget, antialiasedMask);
+                    commandBuffer.SetRenderTarget(antialiasedMask);
+                }
                 DrawNode(commandBuffer, selected);
+                if (antialiasedMask != null && outlineTarget != null)
+                {
+                    commandBuffer.Blit(antialiasedMask, outlineTarget);
+                }
                 SelectedDraws = 1;
             }
             OutlineRenderer.colorIndex = 3;
+            OutlineRenderer.alpha = 1;
             OutlineRenderer.sundot = 1;
+            OutlineRenderer.veinHighlightMode = false;
         }
 
         private static void DrawNode(CommandBuffer commands, NodeOutline node)
@@ -177,7 +246,9 @@ namespace FluidPipes
             {
                 var buffers = __instance.rtex;
                 adjacentCommands.Clear();
-                adjacentCommands.SetRenderTarget(buffers[0]);
+                adjacentCommands.SetRenderTarget(
+                    antialiasedMask != null ? antialiasedMask : buffers[0]
+                );
                 adjacentCommands.ClearRenderTarget(true, true, Color.clear);
                 foreach (var entry in nodes)
                 {
@@ -186,6 +257,10 @@ namespace FluidPipes
                         DrawNode(adjacentCommands, entry.Value);
                         AdjacentDraws++;
                     }
+                }
+                if (antialiasedMask != null)
+                {
+                    adjacentCommands.Blit(antialiasedMask, buffers[0]);
                 }
                 Graphics.ExecuteCommandBuffer(adjacentCommands);
                 for (int index = 0; index + 1 < __instance.bufferCount; index++)
@@ -245,6 +320,8 @@ namespace FluidPipes
             factory = null;
             selectedEntity = 0;
             SelectedDraws = AdjacentDraws = 0;
+            outlineTarget = null;
+            FreeMask();
         }
 
         internal static void Dispose()

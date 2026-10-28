@@ -1,4 +1,4 @@
-# Fluid Pipes API v1 接口文档
+# Fluid Pipes API v2 接口文档
 
 Fluid Pipes 同时提供管道建筑和供其它 BepInEx mod 使用的共享库存 API。安装插件及基础依赖后，即可使用管道和阀门的建造、运输、渲染与交互功能。外部集成通过 `FluidPipes.API` 命名空间访问同一套运行逻辑，实现类型使用 `internal` 可见性。
 
@@ -20,7 +20,7 @@ using BepInEx;
 using FluidPipes.API;
 
 [BepInPlugin("example.pipeconsumer", "Pipe Consumer", "1.0.0")]
-[BepInDependency(PipeApi.PluginGuid, "0.4.0")]
+[BepInDependency(PipeApi.PluginGuid, "0.11.0")]
 public sealed class ConsumerPlugin : BaseUnityPlugin
 {
 }
@@ -28,7 +28,9 @@ public sealed class ConsumerPlugin : BaseUnityPlugin
 
 Fluid Pipes 的 GUID 是 `com.komonad.dsp.fluidpipes`。运行时需要安装 Fluid Pipes 及其依赖 BepInEx 5、CommonAPI、LDBTool、DSPModSave。仓库中的 [可编译示例](../examples/PipeConsumer/PipeConsumer.csproj) 展示依赖声明、注册生命周期和存取方式。
 
-`PipeApi.ApiVersion` 表示 API 契约代数；`PipeApi.ModVersion` 表示插件发行版本。API v1 的兼容升级保留现有签名和语义；不兼容变更需要新的契约代数和发行说明。插件程序集版本保持 `1.0.0.0`，文件版本跟随发行版本。
+`PipeApi.ApiVersion` 为 2，`PipeApi.ModVersion` 为 `0.11.0`。扩展通过 API v2 的公开类型编译，并声明对应的最低插件依赖版本。
+
+类型定义通过 `PipeTypeDefinition.CreateSharedInventory` 或 `CreateStructure` 创建。外观使用一个 `PipeAppearance` 构造器，支持工厂感知的纹理坐标和 `receiveShadows` 设置。
 
 ## 初始化和生命周期
 
@@ -52,7 +54,7 @@ using FluidPipes.API;
 using xiaoye97;
 
 [BepInPlugin("example.custompipes", "Custom Pipes", "1.0.0")]
-[BepInDependency(PipeApi.PluginGuid, "0.8.0")]
+[BepInDependency(PipeApi.PluginGuid, "0.11.0")]
 public sealed class CustomPipesPlugin : BaseUnityPlugin
 {
     private void Awake()
@@ -65,7 +67,10 @@ public sealed class CustomPipesPlugin : BaseUnityPlugin
     {
         var item = PipeTypes.CreateItem(9700, "CustomPipes.Name", "CustomPipes.Description");
         LDBTool.PreAddProto(item);
-        PipeTypes.Register("example.custompipes", new PipeTypeDefinition("custom", item));
+        PipeTypes.Register(
+            "example.custompipes",
+            PipeTypeDefinition.CreateSharedInventory("custom", item)
+        );
     }
 
     private void OnDestroy()
@@ -80,6 +85,37 @@ public sealed class CustomPipesPlugin : BaseUnityPlugin
 关闭后，库跳过内置物品、阀门模型、配方、科技解锁、建造栏和调试赠送物品；共享库存、物品准入、拓扑、建造和渲染 API 仍然可用。`PipeTypes.CreateItem` 使用库在 pre-add 阶段准备的独立模板，扩展继续注册自己的物品、配方及类型。
 
 内容选择属于整个进程的配置，多个插件共享同一状态。每个存档应保持稳定的内容集合：含内置管道或阀门的存档继续启用内置内容；采用自有物品体系的存档保持相应扩展及其注册设置。存档中的实体和库存由已安装的对应物品定义解释。
+
+## 类型与拓扑查询（0.11.0 起）
+
+`PipeTypeDefinition.CreateSharedInventory` 定义普通共享库存管道；`CreateStructure` 定义由扩展维护运行逻辑的连接结构。两者校验类型参数并返回可交给 `PipeTypes.Register` 的定义。`CreateStructure` 通过 `constructionMode:` 选择建造模式。已有原型可直接绑定，不必通过 `CreateItem` 重建名称、配方或科技。完整注册时序、参数和结构示例见 [类型与外观扩展](PIPE_TYPES.md)。
+
+`PipeTypes.TryGet` 返回的 `PipeTypeInfo` 包含身份、连接策略、几何配置，以及只读的 `Appearance` 和 `ConstructionMode`。`Appearance` 是注册时的配置引用，允许为 `null`；它不提供绘制中的可变材质或属性块。
+
+`PipeAppearance.textureCoordinate` 接收 `(PlanetFactory factory, Vector3 position)`，保证工厂非空，返回有限的纵向纹理坐标。省略回调时使用局部弧长；缺少工厂的内部预览直接使用局部弧长，不调用回调。异常、`NaN` 或无穷值会记录诊断并停用该类型的坐标回调。`receiveShadows` 默认 `true`，可在构造外观时设置，投影行为与受影设置独立。
+
+| 查询 | 结果及成本 |
+| --- | --- |
+| `GetNeighbors`、`GetIncomingNeighbors`、`GetOutgoingNeighbors` | 独立的直接邻居数组；方向按类型定义解释 |
+| `GetConnectedNodes` | 弱连通分量的独立数组，工作量随分量大小增长 |
+| `CopyNeighbors`、`CopyIncomingNeighbors`、`CopyOutgoingNeighbors` | 写入调用方的 `List<int>`，返回结果数量 |
+| `CopyConnectedNodes` | 把弱连通分量写入调用方的 `List<int>`，仍需遍历分量 |
+| `TryGetTopologyVersion(factory, out long version)` | O(1) 读取工厂拓扑修订号，不扫描节点 |
+
+所有 `Copy*` 方法的签名均为 `(PlanetFactory factory, int entityId, List<int> destination)`，返回 `int`。每次调用先清空列表；工厂或节点无效时列表为空并返回 0，`destination` 为 `null` 时抛出 `ArgumentNullException`。列表容量充足、图缓存已同步时可避免结果数组分配；缓存初始化、拓扑重建与扩容仍可能分配内存。
+
+```csharp
+private readonly List<int> neighbors = new List<int>(8);
+
+private void RefreshNeighbors(PlanetFactory factory, int entityId)
+{
+    PipeTypes.CopyNeighbors(factory, entityId, neighbors);
+}
+```
+
+调用方可用拓扑版本减少连通重算。库未就绪或工厂无效时返回 `false` 且版本为 0；仅在同一工厂及其运行时图生命周期内比较版本，切换存档或工厂后清除缓存。版本不表示库存、供电或生产状态。节点 ID 可以复用，因此缓存还需关联工厂和当前实体身份，并遵循下文的线程约定。
+
+库提供通用运输、拓扑、局部截面与路径外观。区域成环、地理槽位布局、建筑附件及运行状态属于扩展维护的领域逻辑。
 
 ## 注册额外物品
 

@@ -1330,6 +1330,14 @@ namespace FluidPipes
 
         private void Triangle(int material, int a, int b, int c)
         {
+            // Pattern tapers can collapse a section edge to one point.
+            if (
+                Vector3.Cross(vertices[b] - vertices[a], vertices[c] - vertices[a]).sqrMagnitude
+                == 0
+            )
+            {
+                return;
+            }
             indices[material].Add(a);
             indices[material].Add(b);
             indices[material].Add(c);

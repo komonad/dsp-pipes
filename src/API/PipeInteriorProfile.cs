@@ -106,6 +106,9 @@ namespace FluidPipes.API
     /// <remarks>无向类型的构件在 (x, y) 与 (-x, y) 处一一匹配，包括截面形状、尺寸和表面角色。路径反向会翻转横向轴；径向 Y 轴保持其朝向。偏移和尺寸相对于外管壁半径度量。构件沿节点中心线延伸；分支节点为每个连接臂生成一个截面。</remarks>
     public sealed class PipeInteriorProfile
     {
+        /// <summary>单个结构截面支持的最大构件数。</summary>
+        public const int MaximumMembers = 16;
+
         /// <summary>已配置构件的有序只读快照。</summary>
         public IReadOnlyList<PipeInteriorMember> Members { get; }
 
@@ -129,10 +132,14 @@ namespace FluidPipes.API
                     throw new ArgumentNullException(nameof(members));
                 }
                 snapshot.Add(member);
-                if (snapshot.Count > 16)
+                if (snapshot.Count > MaximumMembers)
                 {
                     throw new ArgumentException(
-                        "A cross-section supports one through sixteen members.",
+                        "An interior profile supports at most "
+                            + MaximumMembers
+                            + " members; received "
+                            + snapshot.Count
+                            + ".",
                         nameof(members)
                     );
                 }
@@ -140,7 +147,7 @@ namespace FluidPipes.API
             if (snapshot.Count == 0)
             {
                 throw new ArgumentException(
-                    "A cross-section supports one through sixteen members.",
+                    "An interior profile requires at least one member.",
                     nameof(members)
                 );
             }

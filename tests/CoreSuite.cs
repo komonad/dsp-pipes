@@ -32,6 +32,10 @@ namespace FluidPipes.Tests
         public static string Run(bool million)
         {
             var report = new StringBuilder();
+            CopyTopologyQueries();
+            report.AppendLine(
+                "PASS reusable topology buffers, detached copies and mutation versions"
+            );
             AdmissionPolicy();
             report.AppendLine(
                 "PASS item admission union, exclusion precedence, ID parsing and snapshot isolation"
@@ -221,6 +225,105 @@ namespace FluidPipes.Tests
                 );
             }
             return report.ToString();
+        }
+
+        private static void CopyTopologyQueries()
+        {
+            var graph = new PipeGraph();
+            for (int node = 1; node <= 9; node++)
+                graph.Add(node);
+            for (int node = 2; node <= 8; node++)
+                graph.Connect(1, node);
+            var buffer = new List<int>(32) { int.MaxValue };
+            int capacity = buffer.Capacity;
+            long version = graph.TopologyVersion;
+            Check(
+                graph.CopyLinks(1, buffer) == 7 && buffer.SequenceEqual(graph.Links(1)),
+                "copy links retains high-degree neighbor order"
+            );
+            buffer[0] = int.MaxValue;
+            Check(
+                !graph.Links(1).Contains(int.MaxValue),
+                "copy links does not expose graph storage"
+            );
+            Check(
+                graph.CopyMembers(1, buffer) == 8 && buffer.SequenceEqual(graph.Members(1)),
+                "copy component retains member order and replaces previous contents"
+            );
+            Check(
+                buffer.Capacity == capacity && graph.CopyLinks(9, buffer) == 0 && buffer.Count == 0,
+                "isolated link query reuses and clears destination"
+            );
+            foreach (int missing in new[] { 0, -1, 99 })
+            {
+                buffer.Add(123);
+                Check(
+                    graph.CopyLinks(missing, buffer) == 0 && buffer.Count == 0,
+                    "missing link query clears stale contents"
+                );
+                buffer.Add(456);
+                Check(
+                    graph.CopyMembers(missing, buffer) == 0 && buffer.Count == 0,
+                    "missing component query clears stale contents"
+                );
+            }
+            foreach (
+                Action operation in new Action[]
+                {
+                    () => graph.CopyLinks(1, null),
+                    () => graph.CopyMembers(99, null),
+                }
+            )
+            {
+                bool rejected = false;
+                try
+                {
+                    operation();
+                }
+                catch (ArgumentNullException)
+                {
+                    rejected = true;
+                }
+                Check(rejected, "copy topology rejects a null destination");
+            }
+            Check(graph.TopologyVersion == version, "topology reads preserve version");
+            graph.Add(1);
+            Check(graph.Connect(2, 1), "duplicate connection remains successful");
+            Check(
+                !graph.Connect(1, 1) && !graph.Connect(1, 99),
+                "invalid connections are rejected"
+            );
+            graph.Disconnect(2, 9);
+            graph.Remove(99);
+            Check(
+                graph.TopologyVersion == version,
+                "duplicate and rejected topology operations preserve version"
+            );
+            Check(
+                graph.Insert(1, 1000, 4, 12) && graph.Take(8, 2).Count == 2,
+                "inventory fixture operates across component"
+            );
+            Check(
+                graph.TopologyVersion == version,
+                "inventory mutations do not change topology version"
+            );
+            Check(
+                graph.Connect(2, 3) && graph.TopologyVersion == ++version,
+                "new cycle edge changes topology without changing component membership"
+            );
+            graph.Disconnect(2, 3);
+            Check(graph.TopologyVersion == ++version, "edge removal advances topology version");
+            graph.Remove(8);
+            Check(graph.TopologyVersion == ++version, "node removal advances topology version");
+            graph.Add(8);
+            Check(
+                graph.TopologyVersion == ++version,
+                "recycled node identity advances topology version"
+            );
+            Check(
+                graph.CopyMembers(8, buffer) == 1 && buffer.SequenceEqual(new[] { 8 }),
+                "recycled node has an independent copied component"
+            );
         }
 
         private static void RoundTrip(PipeGraph graph, int[] nodes)

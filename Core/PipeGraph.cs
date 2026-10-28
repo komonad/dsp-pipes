@@ -508,6 +508,38 @@ namespace FluidPipes
             }
         }
 
+        public int CopyLinks(int nodeId, List<int> destination) =>
+            CopyTopology(nodeId, destination, false);
+
+        public int CopyMembers(int nodeId, List<int> destination) =>
+            CopyTopology(nodeId, destination, true);
+
+        private int CopyTopology(int nodeId, List<int> destination, bool component)
+        {
+            if (destination == null)
+            {
+                throw new ArgumentNullException(nameof(destination));
+            }
+            destination.Clear();
+            topology.EnterReadLock();
+            try
+            {
+                if (nodes.TryGetValue(nodeId, out var node))
+                {
+                    HashSet<int> source = component ? node.Net.Members : node.Links;
+                    foreach (int entityId in source)
+                    {
+                        destination.Add(entityId);
+                    }
+                }
+                return destination.Count;
+            }
+            finally
+            {
+                topology.ExitReadLock();
+            }
+        }
+
         public int[] Representatives()
         {
             topology.EnterReadLock();

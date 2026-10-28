@@ -45,6 +45,8 @@ namespace FluidPipes.API
     /// <remarks>相位回调在网格重建期间执行，并接收工厂和中心线的世界位置。相邻路径采样点之间的相位跨度应小于半个周期。关键帧之间线性插值，网格在经过的关键帧处补充截面。回调在相同位置返回相同相位，使相邻节点共享边界形状。</remarks>
     public sealed class PipeInteriorPattern
     {
+        /// <summary>单个周期模式支持的最大关键帧数。</summary>
+        public const int MaximumKeyframes = 32;
         private readonly Func<PlanetFactory, Vector3, float> phase;
 
         /// <summary>按相位递增排列的只读关键帧。</summary>
@@ -89,12 +91,18 @@ namespace FluidPipes.API
                     throw new ArgumentNullException(nameof(keyframes));
                 }
                 if (
-                    snapshot.Count >= 32
+                    snapshot.Count >= MaximumKeyframes
                     || snapshot.Count > 0 && keyframe.Phase <= snapshot[snapshot.Count - 1].Phase
                 )
                 {
                     throw new ArgumentException(
-                        "Keyframes require increasing phases and at most 32 entries.",
+                        "Keyframes require increasing phases and at most "
+                            + MaximumKeyframes
+                            + " entries; received phase "
+                            + keyframe.Phase
+                            + " at index "
+                            + snapshot.Count
+                            + ".",
                         nameof(keyframes)
                     );
                 }

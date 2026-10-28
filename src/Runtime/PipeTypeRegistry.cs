@@ -132,7 +132,7 @@ namespace FluidPipes
         internal static void InitializeTemplate(ItemProto item) => template = item;
 
         internal static void Default(ItemProto item) =>
-            Register(PipeApi.PluginGuid, new PipeTypeDefinition("default", item));
+            Register(PipeApi.PluginGuid, PipeTypeDefinition.CreateSharedInventory("default", item));
 
         internal static ItemProto CreateItem(int itemId, string nameKey, string descriptionKey)
         {

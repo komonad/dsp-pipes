@@ -4,11 +4,6 @@ param(
     [switch]$Vanilla,
     [switch]$WithBuildBarTool,
     [string]$OrbitalPlugin,
-    [switch]$Components,
-    [switch]$AppearanceOnly,
-    [switch]$RenderProfile,
-    [switch]$SevenRings,
-    [switch]$NativeBelts,
     [string]$PipePlugin
 )
 
@@ -60,7 +55,7 @@ $arguments = @(
     '--doorstop-enable', 'true', '--doorstop-target',
     ('"' + (Join-Path $bepDirectory 'core/BepInEx.Preloader.dll') + '"')
 )
-$process = Start-Process -FilePath (Join-Path $gameDirectory 'DSPGAME.exe') -ArgumentList $arguments -WorkingDirectory $gameDirectory -WindowStyle Hidden -PassThru -Environment @{SteamAppId='1366540';SteamGameId='1366540';FluidPipesOrbitalComponents=$(if($Components){'1'}else{'0'});FluidPipesOrbitalAppearance=$(if($AppearanceOnly -or $RenderProfile){'1'}else{'0'});FluidPipesOrbitalRenderProfile=$(if($RenderProfile){'1'}else{'0'});FluidPipesSevenOrbitalRings=$(if($SevenRings){'1'}else{'0'});FluidPipesNativeOrbitalBelts=$(if($NativeBelts){'1'}else{'0'})}
+$process = Start-Process -FilePath (Join-Path $gameDirectory 'DSPGAME.exe') -ArgumentList $arguments -WorkingDirectory $gameDirectory -WindowStyle Hidden -PassThru -Environment @{SteamAppId='1366540';SteamGameId='1366540'}
 Write-Output "OrbitalRing checks PID=$($process.Id)"
 Write-Output "Run directory=$runDirectory"
 try {

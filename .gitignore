@@ -17,6 +17,7 @@ Local.props
 
 # 测试输出与渲染截图
 screenshots/
+artifacts/performance-*/
 tests/*-results.txt
 samples/**/*-results.txt
 

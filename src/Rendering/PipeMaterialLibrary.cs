@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using FluidPipes.API;
 using UnityEngine;
 
@@ -11,8 +12,11 @@ namespace FluidPipes
             new Dictionary<int, PipeMaterialSet>();
         private static readonly HashSet<int> failedEffects = new HashSet<int>();
         private static readonly HashSet<int> failedGroups = new HashSet<int>();
-        private static readonly Dictionary<int, Func<Vector3, float>> coordinates =
-            new Dictionary<int, Func<Vector3, float>>();
+        private static ConditionalWeakTable<
+            PlanetFactory,
+            Dictionary<int, Func<Vector3, float>>
+        > factoryCoordinates =
+            new ConditionalWeakTable<PlanetFactory, Dictionary<int, Func<Vector3, float>>>();
         private static PipeMaterialSet defaults;
 
         internal static PipeMaterialSet Get(int itemId)
@@ -61,20 +65,32 @@ namespace FluidPipes
             }
         }
 
-        internal static Func<Vector3, float> TextureCoordinate(int itemId)
+        internal static Func<Vector3, float> TextureCoordinate(int itemId, PlanetFactory factory)
         {
-            if (coordinates.TryGetValue(itemId, out var coordinate))
-            {
-                return coordinate;
-            }
             var callback = PipeTypeRegistry.Get(itemId)?.Definition.Appearance?.TextureCoordinate;
-            if (callback == null)
+            if (callback == null || factory == null)
             {
-                coordinates.Add(itemId, null);
                 return null;
             }
+            var cache = factoryCoordinates.GetValue(
+                factory,
+                _ => new Dictionary<int, Func<Vector3, float>>()
+            );
+            if (!cache.TryGetValue(itemId, out var coordinate))
+            {
+                coordinate = SafeCoordinate(itemId, position => callback(factory, position));
+                cache.Add(itemId, coordinate);
+            }
+            return coordinate;
+        }
+
+        private static Func<Vector3, float> SafeCoordinate(
+            int itemId,
+            Func<Vector3, float> callback
+        )
+        {
             bool failed = false;
-            coordinate = position =>
+            return position =>
             {
                 if (failed)
                 {
@@ -98,8 +114,6 @@ namespace FluidPipes
                     return float.NaN;
                 }
             };
-            coordinates.Add(itemId, coordinate);
-            return coordinate;
         }
 
         internal static bool Effects(
@@ -141,7 +155,8 @@ namespace FluidPipes
             sets.Clear();
             failedEffects.Clear();
             failedGroups.Clear();
-            coordinates.Clear();
+            factoryCoordinates =
+                new ConditionalWeakTable<PlanetFactory, Dictionary<int, Func<Vector3, float>>>();
         }
     }
 }

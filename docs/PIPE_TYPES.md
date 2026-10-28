@@ -1,10 +1,12 @@
 # 管道类型与外观扩展
 
-Fluid Pipes 0.7.0 提供 `FluidPipes.API.PipeTypes`。扩展通过自己的 `ItemProto` 注册程序化连接类型；默认安装包含管道和阀门。0.8.0 的 `PipeApi.DisableBuiltInItems()` 可在依赖插件的 `Awake` 中关闭内置内容，供扩展采用自有物品体系。
+扩展通过 `FluidPipes.API.PipeTypes` 将自己的 `ItemProto` 注册为管道类型。默认安装包含管道和阀门；采用自有物品体系的扩展可在 `Awake` 中调用 `PipeApi.DisableBuiltInItems()` 选择外部内容。
+
+Fluid Pipes 0.11.0 提供 API v2。类型通过 `PipeTypeDefinition.CreateSharedInventory` 或 `CreateStructure` 定义；拓扑查询支持独立数组、可复用列表和工厂拓扑版本。扩展声明 `[BepInDependency(PipeApi.PluginGuid, "0.11.0")]`。
 
 ## API 边界
 
-公共 API 随 `FluidPipes.dll` 一起发布，命名空间为 `FluidPipes.API`。扩展在编译时引用这个程序集、游戏程序集和所需 Unity 程序集，在运行时通过 BepInEx 前置依赖加载。源码按职责组织，类型的命名空间和程序集身份保持稳定。
+公共 API 随 `FluidPipes.dll` 一起发布，命名空间为 `FluidPipes.API`。扩展在编译时引用这个程序集、游戏程序集和所需 Unity 程序集，在运行时通过 BepInEx 前置依赖加载。
 
 | 入口或配置 | 职责 |
 | --- | --- |
@@ -15,6 +17,35 @@ Fluid Pipes 0.7.0 提供 `FluidPipes.API.PipeTypes`。扩展通过自己的 `Ite
 | `PipeGeometryProfile`、`PipeInteriorProfile`、`PipeInteriorSection` | 不可变的几何尺寸和结构截面 |
 
 扩展面向这些公开类型实现功能。注册索引、Harmony 补丁、库存缓存、网格生成和材质缓存由库内部维护。`Structure` 为外部模拟提供连接与显示，`SharedInventory` 继续使用管道的库存规则；独立物品、配方和科技由扩展注册。
+
+库负责通用运输、连接拓扑、局部截面和路径外观。区域成环判定、行星经纬度与设施槽位布局、建筑附件及其运行条件属于扩展；扩展可把计算结果通过外观回调和分组键交给库绘制。
+
+## 最小接入
+
+普通共享库存管道只需创建物品并注册类型。在 LDBTool 的 `PreAddDataAction` 内执行：
+
+```csharp
+var item = PipeTypes.CreateItem(11960, "Example.PipeName", "Example.PipeDescription");
+LDBTool.PreAddProto(item);
+PipeTypes.Register(
+    "example.pipes",
+    PipeTypeDefinition.CreateSharedInventory("pipe", item)
+);
+```
+
+名称翻译、配方、科技、图标和 ID 分配由扩展注册。共享库存类型默认使用无向连接和通用库存家族；省略外观与几何参数时使用库的默认管道配置。
+
+已有物品可在所属扩展完成原型注册后、库封闭类型索引前绑定，例如在 `PostAddDataAction` 中：
+
+```csharp
+ItemProto item = LDB.items.Select(existingItemId);
+PipeTypes.Register(
+    "example.pipes",
+    PipeTypeDefinition.CreateSharedInventory("existing-pipe", item, appearance: appearance)
+);
+```
+
+绑定会使该物品使用管道运行语义；原型须具备库要求的原生传送带组件。绑定保留原型自身的名称、配方和科技配置。需要外部模拟的结构连接时使用下文的 `CreateStructure`。
 
 ## 类型定义
 
@@ -32,14 +63,13 @@ Fluid Pipes 0.7.0 提供 `FluidPipes.API.PipeTypes`。扩展通过自己的 `Ite
 
 连接两端的 `Behavior`、`DirectionMode` 和 `ConnectionFamily` 必须一致。共享库存类型的默认家族为 `fluidpipes:inventory`；结构类型默认使用自己的完整类型键。扩展可指定相同家族，使不同外观的同类组件互连。
 
-有向类型的方向以原生连接槽为准。无向拓扑缓存为有向类型提供弱连通查询；有向路径顺序通过输入、输出查询读取。同一连通空间的共享库存要求对称可达，因此 `SharedInventory` 与 `Directed` 的组合在定义构造时报告参数错误。外观和尺寸由各自的配置对象定义，方向策略与库存行为使用独立参数。
+有向类型的方向以原生连接槽为准。无向拓扑缓存为有向类型提供弱连通查询；有向路径顺序通过输入、输出查询读取。同一连通空间的共享库存要求对称可达，`CreateSharedInventory` 将连接方向固定为 `Undirected`。结构类型通过 `CreateStructure` 选择方向与建造流程。外观和尺寸由各自的配置对象定义。
 
 ```csharp
-var definition = new PipeTypeDefinition(
+var definition = PipeTypeDefinition.CreateStructure(
     localName: "signal-conduit",
     prototype: signalConduitItem,
     appearance: appearance,
-    behavior: PipeBehavior.Structure,
     connectionFamily: "example.transport:signal",
     batchGroup: GetCircuitGroup,
     directionMode: PipeDirectionMode.Directed,
@@ -53,11 +83,15 @@ var definition = new PipeTypeDefinition(
 PipeTypes.Register("example.transport", definition);
 ```
 
-类型键为 `ownerGuid + ":" + localName`。局部名称使用小写 ASCII 字母、数字、点、下划线或连字符。`PipeTypeInfo` 返回键、所属插件、实际物品 ID、行为、方向和连接家族的值快照。
+`CreateSharedInventory(localName, prototype, appearance, connectionFamily, geometry)` 固定共享库存与无向连接。`CreateStructure(localName, prototype, appearance, directionMode, constructionMode, connectionFamily, batchGroup, geometry)` 固定结构行为，默认使用无向连接和 `PipeConstructionMode.Pipe`。除名称和原型外，其余参数均可省略，建议使用命名参数表达配置。
+
+`PipeConstructionMode.NativeBelt` 仅适用于有向结构，通过 `CreateStructure` 的 `constructionMode:` 参数选择；工厂方法统一校验截面对称性、管壁、尺寸和建造模式。
+
+类型键为 `ownerGuid + ":" + localName`。局部名称使用小写 ASCII 字母、数字、点、下划线或连字符。`PipeTypeInfo` 返回键、所属插件、实际物品 ID、行为、方向、连接家族、`Geometry`、`Appearance` 和 `ConstructionMode`。`Geometry` 和 `Appearance` 是已注册的只读配置引用；省略外观时 `Appearance` 可以为 `null`。
 
 ## 原型注册
 
-扩展声明 `[BepInDependency(PipeApi.PluginGuid, "0.7.0")]`。库的 `Awake` 先订阅 LDBTool，扩展随后订阅自己的原型处理器。
+使用本文命名工厂的扩展声明 `[BepInDependency(PipeApi.PluginGuid, "0.11.0")]`。库的 `Awake` 先订阅 LDBTool，扩展随后订阅自己的原型处理器。
 
 项目引用的 `FluidPipes.dll` 使用 `<Private>false</Private>`，发布包携带扩展自己的 DLL 和资源；运行时由已安装的 Fluid Pipes 提供公共程序集。完整独立项目见 [CopperPipes](../examples/CopperPipes/CopperPipes.csproj)。
 
@@ -82,9 +116,26 @@ PipeTypes.Register("example.transport", definition);
 | `GetIncomingNeighbors` | 有向输入节点；无向类型返回全部邻居 |
 | `GetOutgoingNeighbors` | 有向输出节点；无向类型返回全部邻居 |
 | `GetConnectedNodes` | 弱连通分量的节点，耗时与分量大小成正比 |
+| `CopyNeighbors`、`CopyIncomingNeighbors`、`CopyOutgoingNeighbors`、`CopyConnectedNodes` | 把对应查询写入调用方的 `List<int>`，返回写入数量 |
+| `TryGetTopologyVersion(factory, out long version)` | O(1) 读取该工厂的拓扑修订号，用于判断是否需要重算 |
 | `ConnectionsChanged` | 主线程后续更新中合并派发的连接变化通知 |
 
-这些方法返回独立数组。调用方在主线程或持有工厂独占访问权时读取。实体 ID 可在拆除后复用，缓存需要随工厂切换和拓扑变化更新。
+`Get*` 方法返回独立数组。`Copy*` 方法先清空目标列表，再写入结果；无效工厂或节点得到空列表并返回 0，列表为 `null` 时抛出 `ArgumentNullException`。调用方在主线程或持有工厂独占访问权时读取。实体 ID 可在拆除后复用，缓存需要随工厂切换和拓扑变化更新。
+
+频繁读取可复用一个字段缓冲区：
+
+```csharp
+private readonly List<int> neighbors = new List<int>(8);
+
+private int ReadNeighbors(PlanetFactory factory, int entityId)
+{
+    return PipeTypes.CopyNeighbors(factory, entityId, neighbors);
+}
+```
+
+列表容量充足且拓扑缓存已同步时，`Copy*` 避免为结果创建独立数组；首次同步、拓扑重建和列表扩容仍可能分配内存。`CopyConnectedNodes` 仍需遍历整个连通分量。
+
+`TryGetTopologyVersion` 不遍历节点，也不主动同步图。库未就绪或工厂无效时返回 `false` 且 `version` 为 0。版本只在同一工厂、同一运行时图生命周期内比较；切换工厂、载入存档或重新解析实体时清除调用方的版本缓存。版本跟踪连接拓扑，不代表供电、配方、库存或其它外部运行状态。
 
 原生连接操作可以互相嵌套。通知在后续更新阶段派发，使观察者读取完整的连接状态；同一节点的重复变更合并。处理器适合标记受影响区域，在扩展自己的更新中完成一次重算。外部处理器异常记录诊断并与其它订阅者隔离。
 
@@ -92,7 +143,7 @@ PipeTypes.Register("example.transport", definition);
 
 ## 几何尺寸
 
-`PipeTypeDefinition.geometry` 接收不可变的 `PipeGeometryProfile`，省略时使用 `PipeGeometryProfile.Default`。
+类型工厂的 `geometry` 参数接收不可变的 `PipeGeometryProfile`，省略时使用 `PipeGeometryProfile.Default`。
 
 | 构造参数 | 默认值 | 有效范围 | 含义 |
 | --- | ---: | --- | --- |
@@ -100,6 +151,7 @@ PipeTypes.Register("example.transport", definition);
 | `centerHeight` | 0.34 | 0–2 | 从原生实体位置沿行星径向到管道中心线的偏移 |
 | `fittingScale` | 1 | 0.75–1.5 | 管箍厚度和轴向深度倍率；内孔随管壁半径适配 |
 | `supportRingWidth` | 0 | 0–`radius` | 直段及端点中部支撑环的轴向宽度；零表示省略支撑环 |
+| `isolatedHalfLength` | `null` | 0.05–4，或 `null` | 孤立节点沿纵轴的半长度；`null` 使用 `0.35 × radius / 0.32` |
 
 构造器检查所有尺寸为有限值并处于有效范围。`centerHeight` 与原生实体位置共同确定渲染中心线。管壁、连接几何、选择轮廓和包围范围使用对应类型的尺寸。共享库存节点的容量由库存规则确定。
 
@@ -133,11 +185,10 @@ var interior = new PipeInteriorProfile(new[]
 });
 
 var appearance = new PipeAppearance(wallMode: PipeWallMode.Open, interior: interior);
-var definition = new PipeTypeDefinition(
+var definition = PipeTypeDefinition.CreateStructure(
     "structural-beam",
     structuralBeamItem,
     appearance,
-    PipeBehavior.Structure,
     geometry: new PipeGeometryProfile(radius: 1.0f, centerHeight: 1.08f)
 );
 PipeTypes.Register("example.transport", definition);
@@ -158,8 +209,9 @@ PipeTypes.Register("example.transport", definition);
 - `hasCore`、`coreRadiusFraction`：结构类型的装饰内芯，半径比例范围为 `(0, 0.85]`。
 - `interior`：结构类型的多构件截面；配置后使用各成员的偏移、半径和表面角色生成内部几何。
 - `applyEffects`：每次可见区块绘制时更新 `MaterialPropertyBlock`。
-- `textureCoordinate`：纯函数，将世界空间中心线位置映射到纵向 UV；默认采用局部弧长。
+- `textureCoordinate`：`Func<PlanetFactory, Vector3, float>` 纯函数，将工厂中的世界空间中心线位置映射到纵向 UV；省略时采用局部弧长。
 - `textureCoordinatePeriod`：周期坐标映射的重复间隔，零表示连续坐标。经度映射可指定 512，使网格在跨越经度接缝时展开相邻 UV；重复采样的纹理使用整数周期。
+- `receiveShadows`：是否接收实时阴影，默认 `true`。该设置控制表面受影，保留材质光照与独立的投影行为。
 
 ```csharp
 var appearance = new PipeAppearance(
@@ -180,10 +232,13 @@ var appearance = new PipeAppearance(
             properties.SetVector("_MainTex_ST", new Vector4(1, 1, 0, -context.TimeSeconds));
         }
     },
-    textureCoordinate: position => Mathf.Atan2(position.z, position.x) / (2 * Mathf.PI) * 512,
+    textureCoordinate: (factory, position) =>
+        Mathf.Atan2(position.z, position.x) / (2 * Mathf.PI) * 512,
     textureCoordinatePeriod: 512
 );
 ```
+
+纹理坐标回调保证接收非空工厂，并返回有限坐标。省略回调时使用局部弧长；没有工厂的内部几何预览也使用局部弧长，不调用回调。异常或 `NaN`、无穷值会记录诊断并停用该类型的坐标回调。回调只读取布局，不在网格采样中改变游戏状态。
 
 `PipeMaterialSet` 提供 `Wall`、`Fittings`、`Core`、`MachinePanel` 和 `MachineShell`。`SetMaterial` 将自有 Shader 的材质复制到角色。`InnerWall` 在配置结束后从管壁派生。自有 Shader 应支持相应渲染类别和普通网格顶点、法线及 UV。
 
@@ -201,33 +256,13 @@ var appearance = new PipeAppearance(
 
 几何配置覆盖管壁、管箍及支撑环的尺寸；表面配置覆盖材质、纹理、装饰内芯与 Shader 效果。拓扑与库存配置保持各自的运行语义。
 
-## 存档与兼容
+## 存档与生命周期
 
 运行时存档格式为 6，读取格式 1–6。原生存档保存物品 ID、建筑、待建对象和有向连接槽；Mod 数据保存无向连接、共享库存、阀门和机器接口。渲染资源由注册定义重建。
 
 扩展负责维持物品 ID 和类型语义稳定，并在加载相应存档时安装所需依赖。当前格式通过原生物品 ID 恢复类型；跨 ID 迁移需要同时覆盖原生建筑、背包、待建对象和 Mod 数据。独立的类型归属清单属于后续存档格式扩展。
 
-有向节点在读档后从原生槽恢复弱连通查询，无向节点从保存的连接恢复。历史默认管段的超容量库存继续保留并允许提取。类型注册和公共 API 保持 API v1 的现有签名。
-
-`PipeAppearance` 保留以下七参数构造签名，供已编译的消费者 DLL 链接。该重载的参数均为必填项，并委托到 `interior: null` 的构造路径。
-
-```csharp
-public PipeAppearance(
-    PipeWallMode wallMode,
-    Action<PipeMaterialSet> configureMaterials,
-    bool hasCore,
-    float coreRadiusFraction,
-    Action<PipeEffectContext, MaterialPropertyBlock> applyEffects,
-    Func<Vector3, float> textureCoordinate,
-    float textureCoordinatePeriod
-);
-```
-
-八参数重载在末尾提供可选的 `PipeInteriorProfile interior = null`，所有参数继续支持默认值。反射契约测试检查七参数签名及其参数可选性，源码调用可通过 `interior:` 命名参数选用内部截面。
-
-圆形成员的三参数构造 `PipeInteriorMember(Vector2, float, PipeSurfaceRole)` 同样保留二进制签名。截面构造重载为 `PipeInteriorMember(Vector2, PipeInteriorSection, PipeSurfaceRole)`，圆形构造委托到 `PipeInteriorSection.Circle`。
-
-`PipeTypeDefinition` 保留七参数签名 `(string, ItemProto, PipeAppearance, PipeBehavior, string, Func<PlanetFactory, int, int>, PipeDirectionMode)`，全部参数必填，并委托到 `geometry: null` 的八参数构造路径。八参数重载允许通过可选 `geometry` 设置尺寸。
+有向节点在读档后从原生槽恢复弱连通查询，无向节点从保存的连接恢复。历史默认管段的超容量库存继续保留并允许提取。材质、纹理和几何配置按已注册的 API v2 类型定义重建。
 
 ## 管壁表面分区
 
@@ -245,7 +280,7 @@ var layout = new PipeWallLayout(new[]
 
 分区使用32边截面的网格面采样。铜壳与玻璃分配到独立子网格，分别使用不透明和透明绘制；金属接头和封口维持不透明。渲染缓存沿用原有的空间区块与类型分组。
 
-`PipeAppearance` 的七参数、八参数构造签名继续保留。九参数构造在末尾加入可选 `PipeWallLayout wallLayout`，并提供各参数的默认值。
+`wallLayout` 是 `PipeAppearance` 构造器的可选参数，可与材质、纹理坐标和受影设置一起配置。
 
 
 ### 周期性构件
@@ -287,6 +322,6 @@ var brace = new PipeInteriorMember(
 
 ## 原生传送带建造
 
-外部模拟的结构类型可使用 `PipeDirectionMode.Directed`，并对定义调用 `WithConstructionMode(PipeConstructionMode.NativeBelt)`。此模式使用原生传送带的规划、端口迁移、占位和碰撞检查；程序化渲染继续使用类型的几何、外观、缓存和 LOD。普通共享库存管道使用 `PipeConstructionMode.Pipe`。
+外部模拟的结构类型通过 `CreateStructure` 的 `directionMode: PipeDirectionMode.Directed` 和 `constructionMode: PipeConstructionMode.NativeBelt` 参数选择原生传送带建造。此模式使用原生传送带的规划、端口迁移、占位和碰撞检查；程序化渲染继续使用类型的几何、外观、缓存和 LOD。普通共享库存管道使用 `PipeConstructionMode.Pipe`。
 
-`PipeGeometryProfile` 的五参数构造器可独立设置 `isolatedHalfLength`。该值只控制孤立节点的模型纵向半长度，默认四参数构造器保留由半径换算的尺寸。已连接节点的长度继续由实际连接端点确定。
+`PipeGeometryProfile` 使用一个构造器，五个参数均可省略。`isolatedHalfLength` 只控制孤立节点的模型纵向半长度，默认 `null` 时按半径同比例计算。已连接节点的长度由实际连接端点确定。

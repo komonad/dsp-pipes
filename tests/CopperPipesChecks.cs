@@ -35,16 +35,16 @@ public sealed partial class RuntimeChecks
             "CopperPipes loads as an independent external BepInEx consumer assembly"
         );
         Check(
-            consumer.Metadata.Version.Equals(new System.Version(1, 0, 1))
+            consumer.Metadata.Version.Equals(new System.Version(1, 1, 0))
                 && consumer
                     .Instance.GetType()
                     .GetCustomAttributes(typeof(BepInDependency), true)
                     .Cast<BepInDependency>()
                     .Any(dependency =>
                         dependency.DependencyGUID == PipeApi.PluginGuid
-                        && dependency.MinimumVersion.Equals(new System.Version(0, 8, 0))
+                        && dependency.MinimumVersion.Equals(new System.Version(0, 11, 0))
                     ),
-            "the copper consumer declares its icon-enabled library dependency"
+            "the copper consumer declares its API v2 library dependency"
         );
         Check(
             PipeTypes.TryGet(CopperConsumerGuid + ":copper", out var copper)
@@ -112,13 +112,15 @@ public sealed partial class RuntimeChecks
         Check(
             copperMaterials.Wall != defaultMaterials.Wall
                 && copperMaterials.Fittings != defaultMaterials.Fittings
-                && copperMaterials.Wall.color == expectedCopper
                 && copperMaterials.Fittings.color == expectedCopper
-                && copperMaterials.Wall.renderQueue == 2000
-                && copperMaterials.Wall.GetInt("_ZWrite") == 1
-                && copperMaterials.Wall.GetFloat("_Metallic") > 0.9f
-                && copperMaterials.Wall.GetFloat("_Glossiness") >= 0.7f,
-            "external copper walls and joints own opaque metallic material copies"
+                && copperMaterials.Wall.renderQueue == 3000
+                && copperMaterials.Wall.GetInt("_ZWrite") == 0
+                && copperMaterials.Fittings.renderQueue == 2000
+                && copperMaterials.Fittings.GetFloat("_Metallic") > 0.9f
+                && copperMaterials.Fittings.GetFloat("_Glossiness") >= 0.7f
+                && PipeTypes.TryGet(copperItemId, out var copperType)
+                && copperType.Appearance.WallLayout != null,
+            "external copper combines glass windows with opaque metallic wall sectors and joints"
         );
         Check(
             defaultMaterials.Wall.color == defaultWall

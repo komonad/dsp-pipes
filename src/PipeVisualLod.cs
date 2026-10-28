@@ -445,6 +445,7 @@ namespace FluidPipes
             var eligible = new HashSet<int>();
             foreach (int entityId in chunk.Entities)
             {
+                chunk.Representative = entityId;
                 walls.Append(
                     NodeMesh(factory, entityId, false, detailLevel),
                     factory.entityPool[entityId].pos - origin
@@ -674,7 +675,7 @@ namespace FluidPipes
             var builder = new PipeMesh(
                 definition.Geometry.Radius,
                 false,
-                PipeMaterialLibrary.TextureCoordinate(key.ItemId),
+                PipeMaterialLibrary.TextureCoordinate(key.ItemId, factory),
                 origin,
                 definition.Geometry,
                 appearance.TextureCoordinatePeriod,

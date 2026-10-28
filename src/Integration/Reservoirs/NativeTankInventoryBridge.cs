@@ -39,6 +39,11 @@ namespace FluidPipes.Integration.Reservoirs
                 return true;
             }
 
+            if (!PipePanel.CanInspectInventory(PipeFactory, PipeEntityId))
+            {
+                return false;
+            }
+
             __instance.factory = PipeFactory;
             __instance.player = GameMain.mainPlayer;
             __instance.storage = ProjectionFor(__instance, PipeFactory, 1).Storage;
@@ -63,7 +68,7 @@ namespace FluidPipes.Integration.Reservoirs
                 return true;
             }
 
-            if (__instance.active && PipeFactory != null && PipeEntityId > 0)
+            if (__instance.active && PipePanel.CanInspectInventory(PipeFactory, PipeEntityId))
             {
                 __instance.titleText.text = LDB
                     .items.Select(PipeFactory.entityPool[PipeEntityId].protoId)
@@ -106,23 +111,23 @@ namespace FluidPipes.Integration.Reservoirs
         }
 
         [HarmonyPrefix, HarmonyPatch(typeof(UITankWindow), "_OnUpdate")]
-        private static void BeginProjection(UITankWindow __instance, out Projection __state)
+        private static bool BeginProjection(UITankWindow __instance, out Projection __state)
         {
             __state = null;
+            bool pipe = __instance == PipeWindow;
+            if (pipe && !PipePanel.CanInspectInventory(PipeFactory, PipeEntityId))
+            {
+                return false;
+            }
             if (__instance.factory == null || __instance.player == null)
             {
-                return;
+                return true;
             }
 
-            bool pipe = __instance == PipeWindow;
             int tankId = __instance.tankId;
             FluidPoolView inventory;
             if (pipe)
             {
-                if (!PipeRuntime.IsPipeObject(PipeFactory, PipeEntityId))
-                {
-                    return;
-                }
                 inventory = PipePools.View(
                     PipeRuntime.Bind(PipeFactory.cargoTraffic),
                     PipeEntityId,
@@ -131,7 +136,7 @@ namespace FluidPipes.Integration.Reservoirs
             }
             else if (!PipePools.TryTankInventory(__instance.factory, tankId, out inventory))
             {
-                return;
+                return true;
             }
 
             var projection = ProjectionFor(__instance, __instance.factory, tankId);
@@ -165,6 +170,7 @@ namespace FluidPipes.Integration.Reservoirs
             projection.Storage.tankPool[tankId] = tank;
             __instance.storage = projection.Storage;
             __state = projection;
+            return true;
         }
 
         [HarmonyFinalizer, HarmonyPatch(typeof(UITankWindow), "_OnUpdate")]
@@ -184,6 +190,19 @@ namespace FluidPipes.Integration.Reservoirs
             __instance.storage = projection.OriginalStorage;
             projection.Updating = false;
             if (__exception != null)
+            {
+                RestoreHand(__instance.player, projection);
+                return __exception;
+            }
+            if (
+                projection.PipeEntityId > 0
+                && (
+                    __instance != PipeWindow
+                    || __instance.factory != PipeFactory
+                    || projection.PipeEntityId != PipeEntityId
+                    || !PipePanel.CanInspectInventory(PipeFactory, PipeEntityId)
+                )
+            )
             {
                 RestoreHand(__instance.player, projection);
                 return __exception;
@@ -334,6 +353,10 @@ namespace FluidPipes.Integration.Reservoirs
 
         private static bool IsAllowed(int itemId, UITankWindow window)
         {
+            if (window == PipeWindow && !PipePanel.CanInspectInventory(PipeFactory, PipeEntityId))
+            {
+                return false;
+            }
             if (!projections.TryGetValue(window, out var projection) || !projection.Updating)
             {
                 return ItemProto.isFluid(itemId);

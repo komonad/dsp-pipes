@@ -12,7 +12,7 @@ namespace CopperPipes
 {
     /// <summary>通过 FluidPipes 公共扩展 API 注册可制造的铜制管道。</summary>
     [BepInPlugin(PluginGuid, "Copper Pipes", "1.1.0")]
-    [BepInDependency(PipeApi.PluginGuid, "0.9.0")]
+    [BepInDependency(PipeApi.PluginGuid, "0.11.0")]
     [BepInDependency(CommonAPIPlugin.GUID)]
     [BepInDependency("me.xiaoye97.plugin.Dyson.LDBTool")]
     [CommonAPISubmoduleDependency(nameof(LocalizationModule))]
@@ -102,11 +102,10 @@ namespace CopperPipes
             );
             PipeTypes.Register(
                 ownerGuid: PluginGuid,
-                definition: new PipeTypeDefinition(
+                definition: PipeTypeDefinition.CreateSharedInventory(
                     localName: "copper",
                     prototype: copperItem,
-                    appearance: appearance,
-                    behavior: PipeBehavior.SharedInventory
+                    appearance: appearance
                 )
             );
         }

@@ -23,45 +23,32 @@ namespace FluidPipes.API
         /// <summary>孤立节点沿自身纵轴的半长度，单位为世界单位。</summary>
         public float IsolatedHalfLength { get; }
 
-        /// <summary>定义管道、接头和可选支撑环的尺寸。</summary>
-        /// <param name="radius">几何包络半径，范围为 0.08 到 2 世界单位。</param>
-        /// <param name="centerHeight">相对原生实体位置的径向中心线偏移，范围为 0 到 2 世界单位。</param>
-        /// <param name="fittingScale">管箍厚度和深度倍率，范围为 0.75 到 1.5。</param>
-        /// <param name="supportRingWidth">中部支撑环宽度，范围为 0 到外管壁半径。零表示省略支撑环。</param>
-        /// <exception cref="ArgumentOutOfRangeException">某个尺寸为非有限值或超出其支持区间。</exception>
-        public PipeGeometryProfile(
-            float radius = 0.32f,
-            float centerHeight = 0.34f,
-            float fittingScale = 1f,
-            float supportRingWidth = 0f
-        )
-            : this(radius, centerHeight, fittingScale, supportRingWidth, 0.35f * radius / 0.32f) { }
-
         /// <summary>分别配置截面尺寸与孤立节点的纵向长度。</summary>
         /// <param name="radius">几何包络半径，范围为 0.08 到 2 世界单位。</param>
         /// <param name="centerHeight">相对实体锚点的径向高度，范围为 0 到 2 世界单位。</param>
         /// <param name="fittingScale">接头尺寸倍率，范围为 0.75 到 1.5。</param>
         /// <param name="supportRingWidth">支撑环轴向宽度，范围为 0 到外管壁半径。</param>
-        /// <param name="isolatedHalfLength">孤立节点的半长度，范围为 0.05 到 4 世界单位。</param>
+        /// <param name="isolatedHalfLength">孤立节点的半长度，范围为 0.05 到 4 世界单位；null 按半径同比例计算。</param>
         /// <exception cref="ArgumentOutOfRangeException">某个尺寸超出有限的支持区间。</exception>
         public PipeGeometryProfile(
-            float radius,
-            float centerHeight,
-            float fittingScale,
-            float supportRingWidth,
-            float isolatedHalfLength
+            float radius = 0.32f,
+            float centerHeight = 0.34f,
+            float fittingScale = 1f,
+            float supportRingWidth = 0f,
+            float? isolatedHalfLength = null
         )
         {
             RequireRange(radius, 0.08f, 2f, nameof(radius));
             RequireRange(centerHeight, 0, 2, nameof(centerHeight));
             RequireRange(fittingScale, 0.75f, 1.5f, nameof(fittingScale));
             RequireRange(supportRingWidth, 0, radius, nameof(supportRingWidth));
-            RequireRange(isolatedHalfLength, 0.05f, 4f, nameof(isolatedHalfLength));
+            float halfLength = isolatedHalfLength ?? (0.35f * radius / 0.32f);
+            RequireRange(halfLength, 0.05f, 4f, nameof(isolatedHalfLength));
             Radius = radius;
             CenterHeight = centerHeight;
             FittingScale = fittingScale;
             SupportRingWidth = supportRingWidth;
-            IsolatedHalfLength = isolatedHalfLength;
+            IsolatedHalfLength = halfLength;
         }
 
         private static void RequireRange(

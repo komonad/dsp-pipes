@@ -36,12 +36,6 @@ public sealed partial class RuntimeChecks
 
     private void PipeOpenBeamArguments()
     {
-        Check(
-            typeof(PipeInteriorMember).GetConstructor(
-                new[] { typeof(Vector2), typeof(float), typeof(PipeSurfaceRole) }
-            ) != null,
-            "compiled extensions retain the circular interior member constructor"
-        );
         var circular = new PipeInteriorMember(Vector2.zero, 0.2f);
         Check(
             circular.Section.Kind == PipeInteriorSectionKind.Circle
@@ -106,65 +100,35 @@ public sealed partial class RuntimeChecks
             "off-axis rectangular members preserve the outer envelope clearance"
         );
         var prototype = typeCheckItems["open-beam"];
-        var typeConstructor = typeof(PipeTypeDefinition).GetConstructor(
-            new[]
-            {
-                typeof(string),
-                typeof(ItemProto),
-                typeof(PipeAppearance),
-                typeof(PipeBehavior),
-                typeof(string),
-                typeof(Func<PlanetFactory, int, int>),
-                typeof(PipeDirectionMode),
-            }
-        );
-        Check(
-            typeConstructor != null
-                && typeConstructor.GetParameters().All(parameter => !parameter.IsOptional)
-                && ReferenceEquals(
-                    (
-                        (PipeTypeDefinition)
-                            typeConstructor.Invoke(
-                                new object[]
-                                {
-                                    "binary-type",
-                                    prototype,
-                                    null,
-                                    PipeBehavior.Structure,
-                                    null,
-                                    null,
-                                    PipeDirectionMode.Undirected,
-                                }
-                            )
-                    ).Geometry,
-                    PipeGeometryProfile.Default
-                ),
-            "compiled extensions retain the seven-parameter type constructor and its default geometry"
-        );
         var openAppearance = new PipeAppearance(
             PipeWallMode.Open,
             interior: TypeCheckOpenInterior()
         );
         Check(
-            new PipeTypeDefinition(
-                "open-structure",
-                prototype,
-                openAppearance,
-                PipeBehavior.Structure
-            ).Appearance == openAppearance,
+            PipeTypeDefinition
+                .CreateStructure(
+                    localName: "open-structure",
+                    prototype: prototype,
+                    appearance: openAppearance
+                )
+                .Appearance == openAppearance,
             "open structural profiles allow a fixed radial floor and lateral rail symmetry"
         );
         ExpectTypeException<ArgumentException>(
-            () => new PipeTypeDefinition("open-inventory", prototype, openAppearance),
+            () =>
+                PipeTypeDefinition.CreateSharedInventory(
+                    localName: "open-inventory",
+                    prototype: prototype,
+                    appearance: openAppearance
+                ),
             "open profiles retain structural behavior"
         );
         ExpectTypeException<ArgumentException>(
             () =>
-                new PipeTypeDefinition(
-                    "open-without-members",
-                    prototype,
-                    new PipeAppearance(PipeWallMode.Open),
-                    PipeBehavior.Structure
+                PipeTypeDefinition.CreateStructure(
+                    localName: "open-without-members",
+                    prototype: prototype,
+                    appearance: new PipeAppearance(PipeWallMode.Open)
                 ),
             "open profiles require visible interior members"
         );
@@ -186,11 +150,10 @@ public sealed partial class RuntimeChecks
         );
         ExpectTypeException<ArgumentException>(
             () =>
-                new PipeTypeDefinition(
-                    "mismatched-rectangles",
-                    prototype,
-                    mismatchedSections,
-                    PipeBehavior.Structure
+                PipeTypeDefinition.CreateStructure(
+                    localName: "mismatched-rectangles",
+                    prototype: prototype,
+                    appearance: mismatchedSections
                 ),
             "undirected mirror partners match width and height even when their enclosing radii agree"
         );
@@ -212,11 +175,10 @@ public sealed partial class RuntimeChecks
         );
         ExpectTypeException<ArgumentException>(
             () =>
-                new PipeTypeDefinition(
-                    "mismatched-bevels",
-                    prototype,
-                    mismatchedBevels,
-                    PipeBehavior.Structure
+                PipeTypeDefinition.CreateStructure(
+                    localName: "mismatched-bevels",
+                    prototype: prototype,
+                    appearance: mismatchedBevels
                 ),
             "undirected mirror partners retain equal rounded corners"
         );
@@ -224,33 +186,29 @@ public sealed partial class RuntimeChecks
         var rightRail = new PipeInteriorMember(new Vector2(0.3f, 0), rectangle);
         ExpectTypeException<ArgumentException>(
             () =>
-                new PipeTypeDefinition(
-                    "unbalanced-mirror-members",
-                    prototype,
-                    new PipeAppearance(
+                PipeTypeDefinition.CreateStructure(
+                    localName: "unbalanced-mirror-members",
+                    prototype: prototype,
+                    appearance: new PipeAppearance(
                         PipeWallMode.Open,
                         interior: new PipeInteriorProfile(new[] { leftRail, leftRail, rightRail })
-                    ),
-                    PipeBehavior.Structure
+                    )
                 ),
             "undirected mirror sections retain equal member multiplicities"
         );
         Check(
-            new PipeTypeDefinition(
-                "balanced-mirror-members",
-                prototype,
-                new PipeAppearance(
-                    PipeWallMode.Open,
-                    interior: new PipeInteriorProfile(
-                        new[] { leftRail, leftRail, rightRail, rightRail }
+            PipeTypeDefinition
+                .CreateStructure(
+                    localName: "balanced-mirror-members",
+                    prototype: prototype,
+                    appearance: new PipeAppearance(
+                        PipeWallMode.Open,
+                        interior: new PipeInteriorProfile(
+                            new[] { leftRail, leftRail, rightRail, rightRail }
+                        )
                     )
-                ),
-                PipeBehavior.Structure
-            )
-                .Appearance
-                .Interior
-                .Members
-                .Count == 4,
+                )
+                .Appearance.Interior.Members.Count == 4,
             "undirected mirror sections accept balanced repeated members"
         );
     }
@@ -418,6 +376,7 @@ public sealed partial class RuntimeChecks
                     && selection.GetTriangles(1).SequenceEqual(first.GetTriangles(1)),
                 "open profile selection follows its visible rail and conductor geometry"
             );
+            PrepareStructureBatches(forward, camera);
             int previousContexts = appearanceContexts.Count;
             Check(
                 PipeVisuals.Draw(forward, camera) > 0,

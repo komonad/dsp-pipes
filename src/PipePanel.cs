@@ -55,6 +55,9 @@ namespace FluidPipes
 
         internal static UITankWindow InventoryWindow => inventoryWindow;
 
+        internal static bool CanInspectInventory(PlanetFactory owner, int entityId) =>
+            API.PipeApi.IsPipe(owner, entityId) && PipeRuntime.HasInventory(owner, entityId);
+
         private static RectTransform Rect(
             GameObject control,
             Transform parent,
@@ -327,6 +330,7 @@ namespace FluidPipes
                     out _,
                     out int pipe
                 )
+                && CanInspectInventory(current, pipe)
             )
             {
                 selected = pipe;
@@ -396,8 +400,9 @@ namespace FluidPipes
                 inventoryWindow._Free();
                 inventoryWindow._Init(GameMain.data);
             }
-            NativeTankInventoryBridge.PipeFactory = factory;
-            NativeTankInventoryBridge.PipeEntityId = valve ? 0 : entity;
+            bool inventoryTarget = !valve && CanInspectInventory(factory, entity);
+            NativeTankInventoryBridge.PipeFactory = inventoryTarget ? factory : null;
+            NativeTankInventoryBridge.PipeEntityId = inventoryTarget ? entity : 0;
             if (valve || !PipeRuntime.HasInventory(factory, entity))
             {
                 NativePipeUi.HideInventory(inventoryWindow);
@@ -476,6 +481,8 @@ namespace FluidPipes
 
             entity = 0;
             factory = null;
+            NativeTankInventoryBridge.PipeFactory = null;
+            NativeTankInventoryBridge.PipeEntityId = 0;
             foreach (var hidden in hiddenWindows)
             {
                 if (hidden.Group != null)

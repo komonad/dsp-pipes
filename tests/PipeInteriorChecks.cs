@@ -25,7 +25,7 @@ public sealed partial class RuntimeChecks
     private void PipeInteriorChecks(Camera camera)
     {
         PipeInteriorArguments();
-        PipeInteriorLegacyCore();
+        PipeInteriorDefaultCore();
         PipeInteriorCurvedNetwork(camera);
         PipeInteriorDirectedEnds();
     }
@@ -43,23 +43,6 @@ public sealed partial class RuntimeChecks
 
     private void PipeInteriorArguments()
     {
-        var appearanceConstructor = typeof(PipeAppearance).GetConstructor(
-            new[]
-            {
-                typeof(PipeWallMode),
-                typeof(Action<PipeMaterialSet>),
-                typeof(bool),
-                typeof(float),
-                typeof(Action<PipeEffectContext, MaterialPropertyBlock>),
-                typeof(Func<Vector3, float>),
-                typeof(float),
-            }
-        );
-        Check(
-            appearanceConstructor != null
-                && appearanceConstructor.GetParameters().All(parameter => !parameter.IsOptional),
-            "compiled consumers retain the seven-parameter appearance constructor signature"
-        );
         foreach (
             float invalidValue in new[]
             {
@@ -158,7 +141,12 @@ public sealed partial class RuntimeChecks
         );
         var prototype = typeCheckItems["structural-interior"];
         ExpectTypeException<ArgumentException>(
-            () => new PipeTypeDefinition("inventory-interior", prototype, appearance),
+            () =>
+                PipeTypeDefinition.CreateSharedInventory(
+                    localName: "inventory-interior",
+                    prototype: prototype,
+                    appearance: appearance
+                ),
             "decorative interior profiles belong to structural connection types"
         );
         var asymmetric = new PipeAppearance(
@@ -168,37 +156,34 @@ public sealed partial class RuntimeChecks
         );
         ExpectTypeException<ArgumentException>(
             () =>
-                new PipeTypeDefinition(
-                    "asymmetric-undirected",
-                    prototype,
-                    asymmetric,
-                    PipeBehavior.Structure
+                PipeTypeDefinition.CreateStructure(
+                    localName: "asymmetric-undirected",
+                    prototype: prototype,
+                    appearance: asymmetric
                 ),
             "undirected interior profiles retain their lateral mirror symmetry"
         );
         Check(
-            new PipeTypeDefinition(
-                "asymmetric-directed",
-                prototype,
-                asymmetric,
-                PipeBehavior.Structure,
-                directionMode: PipeDirectionMode.Directed
-            ).Appearance == asymmetric
-                && new PipeTypeDefinition(
-                    "symmetric-undirected",
-                    prototype,
-                    new PipeAppearance(interior: TypeCheckInterior()),
-                    PipeBehavior.Structure
+            PipeTypeDefinition
+                .CreateStructure(
+                    localName: "asymmetric-directed",
+                    prototype: prototype,
+                    appearance: asymmetric,
+                    directionMode: PipeDirectionMode.Directed
                 )
-                    .Appearance
-                    .Interior
-                    .Members
-                    .Count == 5,
+                .Appearance == asymmetric
+                && PipeTypeDefinition
+                    .CreateStructure(
+                        localName: "symmetric-undirected",
+                        prototype: prototype,
+                        appearance: new PipeAppearance(interior: TypeCheckInterior())
+                    )
+                    .Appearance.Interior.Members.Count == 5,
             "directed types preserve asymmetric sections and symmetric sections support either orientation policy"
         );
     }
 
-    private void PipeInteriorLegacyCore()
+    private void PipeInteriorDefaultCore()
     {
         var factory = Fixture(1, 981020, false);
         SetTypeCheckPrototype(factory, 1, "structural-frame");
@@ -302,6 +287,7 @@ public sealed partial class RuntimeChecks
             }
             CheckInteriorEnvelope(firstMesh, firstShape);
             CheckInteriorEnvelope(secondMesh, secondShape);
+            PrepareStructureBatches(factory, camera);
             int previousContexts = appearanceContexts.Count;
             Check(
                 PipeVisuals.Draw(factory, camera) > 0,
@@ -450,7 +436,7 @@ public sealed partial class RuntimeChecks
         var builder = (PipeMesh)
             AccessTools
                 .Method(typeof(PipeVisuals), "NodeMesh")
-                .Invoke(null, new object[] { factory, entityId, true });
+                .Invoke(null, new object[] { factory, entityId, true, 0 });
         return builder.Build("pipe-interior-check");
     }
 

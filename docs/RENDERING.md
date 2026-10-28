@@ -30,15 +30,15 @@
 
 `PipeWallMode.Open` 要求 `Structure` 行为并需要内部截面配置。其绘制批次包含已配置的构件，省略管壁、内壁和外封盖几何。选择描边包含可见的 `Core` 和 `Fittings` 构件。碰撞包围范围继续使用配置的几何包络。开敞截面可组合两侧箱梁、底板和导体，同时保留通畅的中央通道。
 
+`PipeAppearance` 构造器的 `textureCoordinate` 参数为 `Func<PlanetFactory, Vector3, float>`，提供非空工厂和世界空间位置，适用于依照行星布局计算纹理相位的扩展。回调保持纯净并返回有限值；`textureCoordinatePeriod` 控制相邻截面的周期展开。省略回调或内部预览没有工厂时，库使用局部弧长；没有工厂的预览不调用回调。异常或非有限结果会记录诊断并停用该类型的坐标回调。
+
+`PipeTypes.TryGet` 返回的 `PipeTypeInfo.Geometry` 提供注册截面的尺寸与中心高度，供扩展定位独立绘制的附件和建筑接口。
+
 封闭的环形结构可使用周期性世界位置映射，使纵向纹理跨区块边界保持连续。对于周长 `C` 和目标世界重复长度 `L`，扩展可取 `N = max(1, round(C / L))`，把经度映射为 `atan2(z, x) / (2π) * P`，并设置 `textureCoordinatePeriod = P`。渲染器把相邻截面展开到最近的相位。扩展应用 `N / P` 的纵向纹理缩放，实际重复长度为 `C / N`；整数重复次数可闭合整圈接缝。该圆环内的所有批次使用相同的周长和映射。动画把世界速度除以 `C / N`，换算为每秒纹理周期数。
 
 环向 U 按归一化的周长距离取值。圆形截面使用均匀角度步长；圆角矩形累加直边长度和圆角弧长，使两种表面的纹理密度保持一致。接缝顶点在 U = 0 和 U = 1 处共享位置，使插值局限在各自一侧。平面端盖使用独立的平面投影。
 
-七参数 `PipeAppearance` 构造函数仍是二进制契约：`(PipeWallMode, Action<PipeMaterialSet>, bool, float, Action<PipeEffectContext, MaterialPropertyBlock>, Func<Vector3, float>, float)`。该重载的七个参数均为必填，并委托到 `interior: null` 的八参数构造。八参数重载保留可选参数，包括末尾的 `PipeInteriorProfile interior = null`。反射测试校验保留的签名及其参数可选性。
-
-圆形 `PipeInteriorMember(Vector2, float, PipeSurfaceRole)` 构造函数同样保留其二进制签名，并通过 `PipeInteriorSection.Circle` 委托。截面重载接受 `(Vector2, PipeInteriorSection, PipeSurfaceRole)`。
-
-`PipeTypeDefinition` 保留其七参数签名 `(string, ItemProto, PipeAppearance, PipeBehavior, string, Func<PlanetFactory, int, int>, PipeDirectionMode)`。这些必填参数委托到 `geometry: null` 的八参数构造；源码调用方可通过八参数重载提供可选的几何配置。
+API v2 使用 `PipeTypeDefinition.CreateSharedInventory` 或 `CreateStructure` 创建类型定义；几何配置通过命名参数 `geometry:` 提供。`PipeAppearance` 在一个构造器中配置材质、内构件、管壁分区、纹理坐标及 `receiveShadows`。受影默认开启；`receiveShadows: false` 保留材质光照和向其它几何投射阴影的能力，适用于独立简化投影与细薄可见构件不重合的结构。该选项不改变光源的全局阴影偏移。
 
 可选的直连机器接口采用程序化矩形机壳，具有倒角边框、凹陷前面板和短的圆形管道插口。共享周界截面使机壳开口和插口与管道同轴，包括高位接近的情况。前面边框上有四个建模紧固件。外壳、边框和插口颈部使用白色介电表面，平滑度适中。炭灰色嵌板和银色压边圈界定开口。所有不透明表面共享缓存的空间区块网格。
 

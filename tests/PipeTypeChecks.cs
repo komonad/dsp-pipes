@@ -108,7 +108,7 @@ public sealed partial class RuntimeChecks
 
                 PipeTypes.Register(
                     TypeCheckOwner,
-                    new PipeTypeDefinition(
+                    PipeTypeDefinition.CreateSharedInventory(
                         "shared-variant",
                         typeCheckItems["shared-variant"],
                         TypeCheckAppearance("shared-variant"),
@@ -117,7 +117,7 @@ public sealed partial class RuntimeChecks
                 );
                 PipeTypes.Register(
                     TypeCheckOwner,
-                    new PipeTypeDefinition(
+                    PipeTypeDefinition.CreateSharedInventory(
                         "isolated-inventory",
                         typeCheckItems["isolated-inventory"],
                         TypeCheckAppearance("isolated-inventory", failEffects: true),
@@ -126,21 +126,21 @@ public sealed partial class RuntimeChecks
                 );
                 PipeTypes.Register(
                     TypeCheckOwner,
-                    new PipeTypeDefinition(
+                    PipeTypeDefinition.CreateStructure(
                         "structural-frame",
                         typeCheckItems["structural-frame"],
                         new PipeAppearance(
                             PipeWallMode.Opaque,
                             hasCore: true,
-                            textureCoordinate: position => position.x * 0.25f + position.z * 0.5f
+                            textureCoordinate: (_, position) =>
+                                position.x * 0.25f + position.z * 0.5f
                         ),
-                        PipeBehavior.Structure,
-                        StructuralCheckFamily
+                        connectionFamily: StructuralCheckFamily
                     )
                 );
                 PipeTypes.Register(
                     TypeCheckOwner,
-                    new PipeTypeDefinition(
+                    PipeTypeDefinition.CreateStructure(
                         "structural-upgrade",
                         typeCheckItems["structural-upgrade"],
                         TypeCheckAppearance(
@@ -149,8 +149,7 @@ public sealed partial class RuntimeChecks
                             coreRadiusFraction: 0.2f,
                             textureOffset: 30
                         ),
-                        PipeBehavior.Structure,
-                        StructuralCheckFamily,
+                        connectionFamily: StructuralCheckFamily,
                         geometry: new PipeGeometryProfile(
                             radius: 0.4f,
                             centerHeight: 0.8f,
@@ -161,43 +160,41 @@ public sealed partial class RuntimeChecks
                 );
                 PipeTypes.Register(
                     TypeCheckOwner,
-                    new PipeTypeDefinition(
+                    PipeTypeDefinition.CreateStructure(
                         "other-structure",
                         typeCheckItems["other-structure"],
                         TypeCheckAppearance("other-structure", failConfiguration: true),
-                        behavior: PipeBehavior.Structure
+                        constructionMode: PipeConstructionMode.Pipe
                     )
                 );
                 PipeTypes.Register(
                     TypeCheckOwner,
-                    new PipeTypeDefinition(
+                    PipeTypeDefinition.CreateStructure(
                         "structural-interior",
                         typeCheckItems["structural-interior"],
                         TypeCheckAppearance("structural-interior", interior: TypeCheckInterior()),
-                        PipeBehavior.Structure,
-                        StructuralCheckFamily,
+                        connectionFamily: StructuralCheckFamily,
                         directionMode: PipeDirectionMode.Directed,
                         geometry: new PipeGeometryProfile(radius: 0.8f, centerHeight: 0.75f)
                     )
                 );
                 PipeTypes.Register(
                     TypeCheckOwner,
-                    new PipeTypeDefinition(
+                    PipeTypeDefinition.CreateStructure(
                         "directed-interior",
                         typeCheckItems["directed-interior"],
                         TypeCheckAppearance(
                             "directed-interior",
                             interior: TypeCheckAsymmetricInterior()
                         ),
-                        PipeBehavior.Structure,
-                        StructuralCheckFamily,
+                        connectionFamily: StructuralCheckFamily,
                         directionMode: PipeDirectionMode.Directed,
                         geometry: new PipeGeometryProfile(radius: 0.8f, centerHeight: 0.75f)
                     )
                 );
                 PipeTypes.Register(
                     TypeCheckOwner,
-                    new PipeTypeDefinition(
+                    PipeTypeDefinition.CreateStructure(
                         "open-beam",
                         typeCheckItems["open-beam"],
                         TypeCheckAppearance(
@@ -205,8 +202,7 @@ public sealed partial class RuntimeChecks
                             interior: TypeCheckOpenInterior(),
                             wallMode: PipeWallMode.Open
                         ),
-                        PipeBehavior.Structure,
-                        StructuralCheckFamily,
+                        connectionFamily: StructuralCheckFamily,
                         geometry: new PipeGeometryProfile(radius: 0.8f, centerHeight: 0.75f)
                     )
                 );
@@ -219,7 +215,10 @@ public sealed partial class RuntimeChecks
                     () =>
                         PipeTypes.Register(
                             TypeCheckOwner,
-                            new PipeTypeDefinition("shared-variant", duplicateKeyDraft)
+                            PipeTypeDefinition.CreateSharedInventory(
+                                "shared-variant",
+                                duplicateKeyDraft
+                            )
                         ),
                     "registration rejects duplicate owner-qualified type keys"
                 );
@@ -227,7 +226,7 @@ public sealed partial class RuntimeChecks
                     () =>
                         PipeTypes.Register(
                             TypeCheckOwner,
-                            new PipeTypeDefinition(
+                            PipeTypeDefinition.CreateSharedInventory(
                                 "duplicate-item",
                                 typeCheckItems["shared-variant"]
                             )
@@ -247,7 +246,10 @@ public sealed partial class RuntimeChecks
                     {
                         PipeTypes.Register(
                             TypeCheckOwner,
-                            new PipeTypeDefinition("worker-thread", duplicateKeyDraft)
+                            PipeTypeDefinition.CreateSharedInventory(
+                                "worker-thread",
+                                duplicateKeyDraft
+                            )
                         );
                     }
                     catch (Exception error)
@@ -286,12 +288,11 @@ public sealed partial class RuntimeChecks
                 );
                 PipeTypes.Register(
                     TypeCheckOwner,
-                    new PipeTypeDefinition(
+                    PipeTypeDefinition.CreateStructure(
                         "directed-track",
                         track,
                         TypeCheckAppearance("directed-track", hasCore: true),
-                        PipeBehavior.Structure,
-                        StructuralCheckFamily,
+                        connectionFamily: StructuralCheckFamily,
                         batchGroup: (factory, entityId) => entityId % 2,
                         directionMode: PipeDirectionMode.Directed
                     )
@@ -318,6 +319,20 @@ public sealed partial class RuntimeChecks
                     && LDB.items.Select(byItem.ItemId) == registeredItem.Value,
                 "sealed type lookups resolve the initialized item " + registeredItem.Key
             );
+            Check(
+                PipeTypes.TryGet(registeredItem.Value.ID, out var metadata)
+                    && metadata.ConstructionMode == PipeConstructionMode.Pipe
+                    && ReferenceEquals(
+                        metadata.Appearance,
+                        PipeTypeRegistry.Get(registeredItem.Value.ID).Definition.Appearance
+                    )
+                    && ReferenceEquals(
+                        metadata.Geometry,
+                        PipeTypeRegistry.Get(registeredItem.Value.ID).Definition.Geometry
+                    ),
+                "type metadata retains registered construction, appearance and geometry "
+                    + registeredItem.Key
+            );
         }
 
         var nativePipe = LDB.items.Select(PipeApi.PipeItemId);
@@ -342,7 +357,7 @@ public sealed partial class RuntimeChecks
             () =>
                 PipeTypes.Register(
                     TypeCheckOwner,
-                    new PipeTypeDefinition("late-registration", sharedVariant)
+                    PipeTypeDefinition.CreateSharedInventory("late-registration", sharedVariant)
                 ),
             "registration closes after the prototype database becomes ready"
         );
@@ -352,13 +367,14 @@ public sealed partial class RuntimeChecks
         );
         ExpectTypeException<ArgumentException>(
             () =>
-                new PipeTypeDefinition(
-                    "directed-inventory",
+                PipeTypeDefinition.CreateStructure(
+                    "native-undirected",
                     sharedVariant,
-                    directionMode: PipeDirectionMode.Directed
+                    constructionMode: PipeConstructionMode.NativeBelt
                 ),
-            "a shared inventory requires symmetric connection semantics"
+            "native construction rejects an undirected structure"
         );
+        PipeTypeFactoryContracts(sharedVariant);
         foreach (
             float invalidRadius in new[] { float.NaN, float.PositiveInfinity, 0, -0.1f, 0.86f }
         )
@@ -399,6 +415,199 @@ public sealed partial class RuntimeChecks
                 && PipeTypes.GetOutgoingNeighbors(null, 1).Length == 0,
             "type queries handle ordinary belts and unavailable entity targets"
         );
+        Check(
+            !PipeTypes.TryGetTopologyVersion(null, out long missingVersion) && missingVersion == 0,
+            "unavailable topology version has an explicit false result"
+        );
+    }
+
+    private void PipeTypeFactoryContracts(ItemProto prototype)
+    {
+        var appearance = new PipeAppearance(
+            textureCoordinate: (factory, position) => position.y,
+            receiveShadows: false
+        );
+        var geometry = new PipeGeometryProfile(radius: 0.3f, centerHeight: 0.8f);
+        Func<PlanetFactory, int, int> batch = (factory, entityId) => entityId % 3;
+        var shared = PipeTypeDefinition.CreateSharedInventory(
+            "factory-shared",
+            prototype,
+            appearance,
+            "checks:shared",
+            geometry
+        );
+        Check(
+            shared.Behavior == PipeBehavior.SharedInventory
+                && shared.DirectionMode == PipeDirectionMode.Undirected
+                && shared.ConstructionMode == PipeConstructionMode.Pipe
+                && shared.ConnectionFamily == "checks:shared"
+                && ReferenceEquals(shared.Appearance, appearance)
+                && ReferenceEquals(shared.Geometry, geometry),
+            "shared factory fixes inventory direction and preserves explicit immutable settings"
+        );
+        var structure = PipeTypeDefinition.CreateStructure(
+            "factory-structure",
+            prototype,
+            appearance,
+            PipeDirectionMode.Directed,
+            PipeConstructionMode.NativeBelt,
+            "checks:structure",
+            batch,
+            geometry
+        );
+        Check(
+            structure.Behavior == PipeBehavior.Structure
+                && structure.DirectionMode == PipeDirectionMode.Directed
+                && structure.ConstructionMode == PipeConstructionMode.NativeBelt
+                && structure.ConnectionFamily == "checks:structure"
+                && ReferenceEquals(structure.Appearance, appearance)
+                && ReferenceEquals(structure.Geometry, geometry)
+                && ReferenceEquals(structure.BatchGroup, batch),
+            "structure factory preserves direction, construction and rendering policies"
+        );
+        var defaults = PipeTypeDefinition.CreateStructure("factory-defaults", prototype);
+        Check(
+            defaults.DirectionMode == PipeDirectionMode.Undirected
+                && defaults.ConstructionMode == PipeConstructionMode.Pipe
+                && ReferenceEquals(defaults.Geometry, PipeGeometryProfile.Default),
+            "structure factory defaults to ordinary undirected geometry"
+        );
+        ExpectTypeException<ArgumentOutOfRangeException>(
+            () =>
+                PipeTypeDefinition.CreateStructure(
+                    "bad-direction",
+                    prototype,
+                    directionMode: (PipeDirectionMode)99
+                ),
+            "structure factory rejects unknown direction"
+        );
+        ExpectTypeException<ArgumentOutOfRangeException>(
+            () =>
+                PipeTypeDefinition.CreateStructure(
+                    "bad-construction",
+                    prototype,
+                    constructionMode: (PipeConstructionMode)99
+                ),
+            "structure factory rejects unknown construction"
+        );
+        ExpectTypeException<ArgumentNullException>(
+            () => PipeTypeDefinition.CreateSharedInventory("missing-item", null),
+            "shared factory requires a prototype"
+        );
+        ExpectTypeException<ArgumentException>(
+            () =>
+                PipeTypeDefinition.CreateSharedInventory(
+                    "bad-interior",
+                    prototype,
+                    new PipeAppearance(interior: TypeCheckInterior())
+                ),
+            "shared inventory factory rejects structural interiors"
+        );
+        Check(
+            typeof(PipeTypeDefinition).GetConstructors().Length == 0
+                && typeof(PipeTypeInfo).GetProperties().All(property => property.SetMethod == null),
+            "definitions use validated factories and metadata snapshots expose no setters"
+        );
+    }
+
+    private void CheckTypeCopyQueries(PlanetFactory factory, params int[] entities)
+    {
+        Func<int, int[]>[] snapshots =
+        {
+            id => PipeTypes.GetNeighbors(factory, id),
+            id => PipeTypes.GetIncomingNeighbors(factory, id),
+            id => PipeTypes.GetOutgoingNeighbors(factory, id),
+            id => PipeTypes.GetConnectedNodes(factory, id),
+        };
+        Func<int, List<int>, int>[] copies =
+        {
+            (id, target) => PipeTypes.CopyNeighbors(factory, id, target),
+            (id, target) => PipeTypes.CopyIncomingNeighbors(factory, id, target),
+            (id, target) => PipeTypes.CopyOutgoingNeighbors(factory, id, target),
+            (id, target) => PipeTypes.CopyConnectedNodes(factory, id, target),
+        };
+        var destination = new List<int>(32);
+        int capacity = destination.Capacity;
+        Check(
+            PipeTypes.TryGetTopologyVersion(factory, out long before),
+            "ready factory exposes topology version"
+        );
+        for (int query = 0; query < copies.Length; query++)
+        {
+            foreach (int entity in entities)
+            {
+                int[] expected = snapshots[query](entity);
+                destination.Add(int.MaxValue);
+                int count = copies[query](entity, destination);
+                Check(
+                    count == expected.Length
+                        && destination.Count == count
+                        && destination.SequenceEqual(expected),
+                    "reusable query exactly matches detached snapshot order "
+                        + query
+                        + " node="
+                        + entity
+                );
+                if (count > 0)
+                    destination[0] = int.MaxValue;
+                Check(
+                    snapshots[query](entity).SequenceEqual(expected),
+                    "mutating query destination cannot mutate topology " + query
+                );
+            }
+            int currentQuery = query;
+            ExpectTypeException<ArgumentNullException>(
+                () => copies[currentQuery](0, null),
+                "copy query rejects null destination even for invalid nodes " + query
+            );
+        }
+        Check(
+            destination.Capacity == capacity
+                && PipeTypes.TryGetTopologyVersion(factory, out long after)
+                && before == after,
+            "topology copies reuse capacity without changing version"
+        );
+        var stale = new List<int> { 123 };
+        Check(
+            PipeTypes.CopyNeighbors(null, 1, stale) == 0 && stale.Count == 0,
+            "unavailable factory clears neighbor destination"
+        );
+        stale.Add(123);
+        Check(
+            PipeTypes.CopyConnectedNodes(null, 1, stale) == 0 && stale.Count == 0,
+            "unavailable factory clears component destination"
+        );
+    }
+
+    private void CheckHighDegreeCopyQueries()
+    {
+        var factory = Fixture(9, 981005, false);
+        for (int entity = 1; entity <= 9; entity++)
+            SetTypeCheckPrototype(factory, entity, "structural-frame");
+        for (int entity = 2; entity <= 9; entity++)
+            factory.WriteObjectConn(entity, 0, true, 1, 1);
+        Check(
+            PipeTypes.GetNeighbors(factory, 1).Length == 8,
+            "undirected copied-query fixture exceeds native four-port degree"
+        );
+        CheckTypeCopyQueries(factory, 1, 2, 9, 0, -1, 99);
+        Check(
+            PipeTypes.TryGetTopologyVersion(factory, out long version),
+            "high-degree factory exposes topology version"
+        );
+        factory.WriteObjectConn(2, 0, true, 1, 1);
+        Check(
+            PipeTypes.TryGetTopologyVersion(factory, out long duplicateVersion)
+                && version == duplicateVersion,
+            "duplicate undirected edge preserves public topology version"
+        );
+        Check(
+            PipeConnections.Disconnect(factory, 1, 2)
+                && PipeTypes.TryGetTopologyVersion(factory, out long removedVersion)
+                && removedVersion > version,
+            "edge removal advances public topology version"
+        );
+        CheckTypeCopyQueries(factory, 1, 2);
     }
 
     private void PipeTypeInventory()
@@ -451,6 +660,16 @@ public sealed partial class RuntimeChecks
         factory.WriteObjectConn(4, 0, true, 5, 1);
         factory.WriteObjectConn(5, 0, true, 6, 1);
         Check(
+            PipePanel.CanInspectInventory(factory, 1)
+                && PipePanel.CanInspectInventory(factory, 2)
+                && !PipePanel.CanInspectInventory(factory, 4)
+                && !PipePanel.CanInspectInventory(factory, 7)
+                && !PipePanel.CanInspectInventory(null, 1),
+            "inventory inspection is limited to valid shared-inventory pipe types"
+        );
+        CheckStructuralInventoryBridge(factory, 4);
+        CheckTypeCopyQueries(factory, 1, 2, 4, 5, 7, 0, -1, int.MaxValue);
+        Check(
             PipeApi.IsPipe(factory, 4)
                 && PipeTypes
                     .GetConnectedNodes(factory, 4)
@@ -498,7 +717,57 @@ public sealed partial class RuntimeChecks
                 && PipeTypes.GetConnectedNodes(factory, 4).Length == 2,
             "typed inventories and structural components survive save import and factory rebinding"
         );
+        CheckHighDegreeCopyQueries();
         PipeRuntime.Clear();
+    }
+
+    private void CheckStructuralInventoryBridge(PlanetFactory factory, int structure)
+    {
+        Type bridge = typeof(FluidPipes.Integration.Reservoirs.NativeTankInventoryBridge);
+        var savedWindow = FluidPipes.Integration.Reservoirs.NativeTankInventoryBridge.PipeWindow;
+        var savedFactory = FluidPipes.Integration.Reservoirs.NativeTankInventoryBridge.PipeFactory;
+        int savedEntity = FluidPipes.Integration.Reservoirs.NativeTankInventoryBridge.PipeEntityId;
+        var owner = new GameObject("structure-inventory-bridge-check");
+        var window = owner.AddComponent<UITankWindow>();
+        try
+        {
+            FluidPipes.Integration.Reservoirs.NativeTankInventoryBridge.PipeWindow = window;
+            FluidPipes.Integration.Reservoirs.NativeTankInventoryBridge.PipeFactory = factory;
+            FluidPipes.Integration.Reservoirs.NativeTankInventoryBridge.PipeEntityId = structure;
+            window.factory = factory;
+            Check(
+                !(bool)AccessTools.Method(bridge, "Open").Invoke(null, new object[] { window }),
+                "forged structure inventory window cannot open a projection"
+            );
+            object[] arguments = { window, null };
+            Check(
+                !(bool)AccessTools.Method(bridge, "BeginProjection").Invoke(null, arguments)
+                    && arguments[1] == null
+                    && window.storage == null,
+                "structure inventory update skips native gestures without binding storage"
+            );
+            Check(
+                !(bool)
+                    AccessTools
+                        .Method(bridge, "IsAllowed")
+                        .Invoke(null, new object[] { 1000, window }),
+                "structure window does not admit manual fluid insertion"
+            );
+            FluidPipes.Integration.Reservoirs.NativeTankInventoryBridge.PipeEntityId = int.MaxValue;
+            arguments[1] = null;
+            Check(
+                !(bool)AccessTools.Method(bridge, "BeginProjection").Invoke(null, arguments)
+                    && arguments[1] == null,
+                "stale inventory target cannot start a projected gesture"
+            );
+        }
+        finally
+        {
+            FluidPipes.Integration.Reservoirs.NativeTankInventoryBridge.PipeWindow = savedWindow;
+            FluidPipes.Integration.Reservoirs.NativeTankInventoryBridge.PipeFactory = savedFactory;
+            FluidPipes.Integration.Reservoirs.NativeTankInventoryBridge.PipeEntityId = savedEntity;
+            UnityEngine.Object.DestroyImmediate(owner);
+        }
     }
 
     private void DirectedPipeTypeTopology()
@@ -520,6 +789,7 @@ public sealed partial class RuntimeChecks
         factory.WriteObjectConn(2, 0, true, 3, 1);
         factory.WriteObjectConn(4, 0, true, 2, 2);
         RebuildTypeNativePaths(factory, 4);
+        CheckTypeCopyQueries(factory, 1, 2, 3, 4, 5, 0);
         Check(
             PipeTypes.GetOutgoingNeighbors(factory, 2).SequenceEqual(new[] { 3 })
                 && PipeTypes

@@ -355,7 +355,7 @@ public sealed partial class SceneCapture
                 var cached = (PipeMesh)
                     HarmonyLib
                         .AccessTools.Method(typeof(PipeVisuals), "NodeMesh")
-                        .Invoke(null, new object[] { factory, entity.id, true });
+                        .Invoke(null, new object[] { factory, entity.id, true, 0 });
                 if (cached.VertexCount != builder.VertexCount)
                     stale++;
             }

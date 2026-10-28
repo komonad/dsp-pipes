@@ -95,7 +95,8 @@ public sealed partial class RuntimeChecks
                     throw new InvalidOperationException("Injected appearance effect failure.");
                 }
             },
-            textureCoordinate: position => position.x * 0.25f + position.z * 0.5f + textureOffset,
+            textureCoordinate: (_, position) =>
+                position.x * 0.25f + position.z * 0.5f + textureOffset,
             interior: interior
         );
     }
@@ -190,10 +191,13 @@ public sealed partial class RuntimeChecks
         var cameraObject = new GameObject("pipe-type-effects-camera");
         var camera = cameraObject.AddComponent<Camera>();
         camera.enabled = false;
-        camera.transform.position = new Vector3(2, 205, -8);
-        camera.transform.LookAt(new Vector3(2, 200, 0));
+        camera.orthographic = true;
+        camera.orthographicSize = 10;
+        camera.transform.position = new Vector3(2, 215, 0);
+        camera.transform.LookAt(new Vector3(2, 200, 0), Vector3.forward);
         try
         {
+            PrepareStructureBatches(factory, camera);
             appearanceContexts.Clear();
             appearanceAnimationPhase = 0.2f;
             Check(
@@ -220,6 +224,21 @@ public sealed partial class RuntimeChecks
             var trackContexts = appearanceContexts
                 .Where(context => factory.entityPool[context.EntityId].protoId == trackItemId)
                 .ToArray();
+            results.Add(
+                "INFO effect contexts clean="
+                    + appearanceBlocksAreClean
+                    + " groups="
+                    + string.Join(",", trackContexts.Select(context => context.GroupKey).Distinct())
+                    + " surfaces="
+                    + string.Join(",", trackContexts.Select(context => context.Surface).Distinct())
+                    + " nodes="
+                    + string.Join(",", trackContexts.Select(context => context.EntityId).Distinct())
+                    + " all_nodes="
+                    + string.Join(
+                        ",",
+                        appearanceContexts.Select(context => context.EntityId).Distinct()
+                    )
+            );
             Check(
                 appearanceBlocksAreClean
                     && trackContexts.All(context =>
@@ -278,14 +297,14 @@ public sealed partial class RuntimeChecks
         var factory = Fixture(1, 981007, false);
         SetTypeCheckPrototype(factory, 1, "structural-frame");
         PipeVisuals.Draw(factory, camera);
-        int buildsBefore = PipeVisuals.NodeRebuilds;
         var coreBuilderMethod = AccessTools.Method(typeof(PipeVisuals), "NodeMesh");
         var wallBefore = PipeVisuals
             .SelectionGeometry(factory, 1)
             .Build("type-upgrade-wall-before");
         var coreBefore = (
-            (PipeMesh)coreBuilderMethod.Invoke(null, new object[] { factory, 1, true })
+            (PipeMesh)coreBuilderMethod.Invoke(null, new object[] { factory, 1, true, 0 })
         ).Build("type-upgrade-core-before");
+        int buildsBefore = PipeVisuals.NodeRebuilds;
         Mesh wallAfter = null;
         Mesh coreAfter = null;
         try
@@ -297,7 +316,7 @@ public sealed partial class RuntimeChecks
             PipeVisuals.Draw(factory, camera);
             wallAfter = PipeVisuals.SelectionGeometry(factory, 1).Build("type-upgrade-wall-after");
             coreAfter = (
-                (PipeMesh)coreBuilderMethod.Invoke(null, new object[] { factory, 1, true })
+                (PipeMesh)coreBuilderMethod.Invoke(null, new object[] { factory, 1, true, 0 })
             ).Build("type-upgrade-core-after");
             Check(
                 PipeVisuals.NodeRebuilds == buildsBefore + 1
@@ -325,6 +344,16 @@ public sealed partial class RuntimeChecks
                 UnityEngine.Object.DestroyImmediate(coreAfter);
             }
         }
+    }
+
+    private void PrepareStructureBatches(PlanetFactory factory, Camera camera)
+    {
+        PipeVisuals.Draw(factory, camera);
+        for (int attempt = 0; attempt < 256 && !PipeVisuals.StructureMeshesReady; attempt++)
+        {
+            PipeVisuals.PrewarmStructureMeshes(factory, camera);
+        }
+        Check(PipeVisuals.StructureMeshesReady, "structure meshes finish bounded prewarming");
     }
 
     private void PipeGeometryProfileArguments()
@@ -358,7 +387,7 @@ public sealed partial class RuntimeChecks
                 "geometry rejects nonfinite support ring width " + nonfinite
             );
         }
-        foreach (float invalid in new[] { 0.079f, 1.201f })
+        foreach (float invalid in new[] { 0.079f, 2.001f })
         {
             ExpectTypeException<ArgumentOutOfRangeException>(
                 () => new PipeGeometryProfile(radius: invalid),
@@ -391,10 +420,12 @@ public sealed partial class RuntimeChecks
         Check(
             minimum.SupportRingWidth == minimum.Radius
                 && maximum.SupportRingWidth == maximum.Radius
-                && new PipeTypeDefinition(
-                    "default-dimensions",
-                    typeCheckItems["shared-variant"]
-                ).Geometry == defaults,
+                && PipeTypeDefinition
+                    .CreateSharedInventory(
+                        localName: "default-dimensions",
+                        prototype: typeCheckItems["shared-variant"]
+                    )
+                    .Geometry == defaults,
             "geometry accepts inclusive bounds and omitted profiles retain the shared defaults"
         );
     }
@@ -577,7 +608,7 @@ public sealed partial class RuntimeChecks
         var fluidBuilder = (PipeMesh)
             AccessTools
                 .Method(typeof(PipeVisuals), "NodeMesh")
-                .Invoke(null, new object[] { factory, 1, true });
+                .Invoke(null, new object[] { factory, 1, true, 0 });
         var liquid = fluidBuilder.Build("profile-fluid-interior");
         try
         {

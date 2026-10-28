@@ -208,6 +208,19 @@ namespace FluidPipes
             new Dictionary<int, Texture2D>();
         private static readonly Dictionary<int, Color> liquidColors = new Dictionary<int, Color>();
         private static Cubemap steelEnvironment;
+        private static readonly int reflectionCube0 = Shader.PropertyToID("unity_SpecCube0");
+        private static readonly int reflectionCube1 = Shader.PropertyToID("unity_SpecCube1");
+        private static readonly int reflectionCube0Hdr = Shader.PropertyToID("unity_SpecCube0_HDR");
+        private static readonly int reflectionCube1Hdr = Shader.PropertyToID("unity_SpecCube1_HDR");
+        private static readonly int reflectionBoxMin = Shader.PropertyToID(
+            "unity_SpecCube0_BoxMin"
+        );
+        private static readonly int reflectionProbe0 = Shader.PropertyToID(
+            "unity_SpecCube0_ProbePosition"
+        );
+        private static readonly int reflectionProbe1 = Shader.PropertyToID(
+            "unity_SpecCube1_ProbePosition"
+        );
         private static MaterialPropertyBlock steelLighting;
         private static readonly MaterialPropertyBlock effectProperties =
             new MaterialPropertyBlock();
@@ -460,14 +473,25 @@ namespace FluidPipes
             steelEnvironment.Apply(true, true);
             steelLighting = new MaterialPropertyBlock();
             // 管道绘制通过材质属性块获得近似的天空反射。
-            steelLighting.SetTexture("unity_SpecCube0", steelEnvironment);
-            steelLighting.SetTexture("unity_SpecCube1", steelEnvironment);
-            steelLighting.SetVector("unity_SpecCube0_HDR", new Vector4(1, 1, 0, 0));
-            steelLighting.SetVector("unity_SpecCube1_HDR", new Vector4(1, 1, 0, 0));
-            steelLighting.SetVector("unity_SpecCube0_BoxMin", new Vector4(0, 0, 0, 1));
-            steelLighting.SetVector("unity_SpecCube0_ProbePosition", Vector4.zero);
-            steelLighting.SetVector("unity_SpecCube1_ProbePosition", Vector4.zero);
+            WriteSteelReflection(steelLighting);
             return steelLighting;
+        }
+
+        internal static void ApplySteelLighting(MaterialPropertyBlock properties, Vector3 radial)
+        {
+            SteelLighting(radial);
+            WriteSteelReflection(properties);
+        }
+
+        private static void WriteSteelReflection(MaterialPropertyBlock properties)
+        {
+            properties.SetTexture(reflectionCube0, steelEnvironment);
+            properties.SetTexture(reflectionCube1, steelEnvironment);
+            properties.SetVector(reflectionCube0Hdr, new Vector4(1, 1, 0, 0));
+            properties.SetVector(reflectionCube1Hdr, new Vector4(1, 1, 0, 0));
+            properties.SetVector(reflectionBoxMin, new Vector4(0, 0, 0, 1));
+            properties.SetVector(reflectionProbe0, Vector4.zero);
+            properties.SetVector(reflectionProbe1, Vector4.zero);
         }
 
         private static void Transparent(Material material, int queue)
@@ -887,7 +911,7 @@ namespace FluidPipes
                         : dimensions.Radius
                     : dimensions.Radius * (appearance?.WallRadiusFraction ?? 1),
                 !liquid,
-                PipeMaterialLibrary.TextureCoordinate(itemId),
+                PipeMaterialLibrary.TextureCoordinate(itemId, factory),
                 factory.entityPool[entityId].pos,
                 dimensions,
                 appearance?.TextureCoordinatePeriod ?? 0,
@@ -1288,13 +1312,7 @@ namespace FluidPipes
             if (definition?.Appearance?.ApplyEffects != null)
             {
                 effectProperties.Clear();
-                effectProperties.SetTexture("unity_SpecCube0", steelEnvironment);
-                effectProperties.SetTexture("unity_SpecCube1", steelEnvironment);
-                effectProperties.SetVector("unity_SpecCube0_HDR", new Vector4(1, 1, 0, 0));
-                effectProperties.SetVector("unity_SpecCube1_HDR", new Vector4(1, 1, 0, 0));
-                effectProperties.SetVector("unity_SpecCube0_BoxMin", new Vector4(0, 0, 0, 1));
-                effectProperties.SetVector("unity_SpecCube0_ProbePosition", Vector4.zero);
-                effectProperties.SetVector("unity_SpecCube1_ProbePosition", Vector4.zero);
+                WriteSteelReflection(effectProperties);
                 if (
                     PipeMaterialLibrary.Effects(
                         key.ItemId,
@@ -1306,6 +1324,7 @@ namespace FluidPipes
                     properties = effectProperties;
                 }
             }
+            bool receiveShadows = definition?.Appearance?.ReceiveShadows ?? true;
             Graphics.DrawMesh(
                 mesh,
                 transform,
@@ -1324,7 +1343,7 @@ namespace FluidPipes
                 )
                     ? ShadowCastingMode.On
                     : ShadowCastingMode.Off,
-                true
+                receiveShadows
             );
         }
 
@@ -1526,6 +1545,30 @@ namespace FluidPipes
                 if (wallMesh == null && coreMesh == null)
                 {
                     continue;
+                }
+
+                if (
+                    !chunk.Entities.Contains(chunk.Representative)
+                    || !PipeRuntime.IsPipeObject(factory, chunk.Representative)
+                    || factory.entityPool[chunk.Representative].protoId != entry.Key.ItemId
+                )
+                {
+                    chunk.Representative = 0;
+                    foreach (int entityId in chunk.Entities)
+                    {
+                        if (
+                            PipeRuntime.IsPipeObject(factory, entityId)
+                            && factory.entityPool[entityId].protoId == entry.Key.ItemId
+                        )
+                        {
+                            chunk.Representative = entityId;
+                            break;
+                        }
+                    }
+                    if (chunk.Representative == 0)
+                    {
+                        continue;
+                    }
                 }
 
                 if (

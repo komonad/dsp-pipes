@@ -20,6 +20,8 @@ The external API delegates to runtime services. Harmony cargo hooks resolve nati
 
 Public type registration, appearance settings, geometry profiles and value snapshots live in separate API files. Registry ownership and connection notification queues belong to internal runtime services. `CopperPipes.dll` consumes the public contract as an independently loaded plugin, registering an opaque material variant while retaining the default glass type and shared-inventory family.
 
+The library owns generic transport, connection topology, local cross-sections and path appearance. Extensions own domain rules for cycle completion, planetary coordinates, facility-slot layouts, building attachments and operating conditions. Appearance callbacks read extension state and set batch rendering properties; domain rules remain outside the inventory and graph models.
+
 ## Inventory invariants
 
 `PipeGraph` owns each pure pipe component's item count and proliferator points. `PipePools` reads and writes the authoritative native tank and station fields. A shared space may contain multiple graph components joined by native reservoirs. External callers receive detached inventory and settings values.
@@ -57,6 +59,8 @@ The core graph synchronizes topology and per-component inventory. Shared-reservo
 Each registered pipe type defines simulation behavior, direction policy, connection family, geometry dimensions and appearance independently. Shared-inventory types use undirected connectivity. Structural types expose graph queries and connection notifications for an external simulation; directed structural types retain native belt input/output slots and cargo paths. Compatibility requires matching behavior, direction policy and connection family. Registration seals against the final item database before factory initialization.
 
 Connection notifications accumulate in a synchronized queue and dispatch on the main thread. Each dispatch deduplicates factory/entity pairs, invokes subscribers outside the queue lock and defers reentrant mutations to the next batch. Save changes clear pending notifications. Consumers resolve entity identity again when processing events because native entity pool indices are reusable.
+
+Array topology queries return detached results; `Copy*` queries clear and reuse a caller-owned list. Sufficient list capacity and a current graph cache avoid result-array allocations, while connected-component queries still traverse the component. `TryGetTopologyVersion` reads a factory's cached revision in O(1) time to coalesce repeated recomputation. Revisions are comparable only within the same factory's runtime graph lifetime and do not track inventory or external operating state.
 
 Stable pure-pipe I/O accesses inventory through the component index. Shared I/O visits storage units as needed; reconciliation visits reservoirs and graph components. Topology/policy changes rebuild reservoir bindings lazily. Node removal or an interior edge cut may traverse the affected graph component. API inventory queries use cached totals; full snapshots additionally aggregate capacity contributors.
 

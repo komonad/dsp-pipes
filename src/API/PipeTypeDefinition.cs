@@ -29,100 +29,82 @@ namespace FluidPipes.API
         /// <summary>规划与碰撞行为的提供方。</summary>
         public PipeConstructionMode ConstructionMode { get; }
 
-        /// <summary>返回采用指定建造规则的不可变类型副本。</summary>
-        /// <param name="mode">管道专用规则，或原生传送带规则。</param>
-        /// <returns>保留原型、模拟、几何与渲染设置的类型副本。</returns>
-        /// <exception cref="ArgumentOutOfRangeException">建造模式无效。</exception>
-        /// <exception cref="ArgumentException">原生传送带模式要求有向结构类型。</exception>
-        public PipeTypeDefinition WithConstructionMode(PipeConstructionMode mode)
-        {
-            if (!Enum.IsDefined(typeof(PipeConstructionMode), mode))
-            {
-                throw new ArgumentOutOfRangeException(nameof(mode));
-            }
-            if (
-                mode == PipeConstructionMode.NativeBelt
-                && (
-                    Behavior != PipeBehavior.Structure
-                    || DirectionMode != PipeDirectionMode.Directed
-                )
-            )
-            {
-                throw new ArgumentException(
-                    "Native belt construction requires a directed structure.",
-                    nameof(mode)
-                );
-            }
-            return new PipeTypeDefinition(this, mode);
-        }
-
-        private PipeTypeDefinition(PipeTypeDefinition source, PipeConstructionMode mode)
-        {
-            LocalName = source.LocalName;
-            Prototype = source.Prototype;
-            Appearance = source.Appearance;
-            Behavior = source.Behavior;
-            ConnectionFamily = source.ConnectionFamily;
-            BatchGroup = source.BatchGroup;
-            DirectionMode = source.DirectionMode;
-            Geometry = source.Geometry;
-            ConstructionMode = mode;
-        }
-
         internal Func<PlanetFactory, int, int> BatchGroup { get; }
 
-        /// <summary>通过七参数二进制接口以标准几何定义由物品承载的程序化连接。</summary>
-        /// <param name="localName">包含小写 ASCII 字母、数字、点、下划线或连字符的稳定局部标识符。</param>
-        /// <param name="prototype">由拥有者独立注册、具有正数 ID 的物品原型。</param>
-        /// <param name="appearance">表面设置；为 null 时继承默认外观。开放表面要求结构内芯。</param>
-        /// <param name="behavior">共享库存或外部模拟的结构连接。</param>
-        /// <param name="connectionFamily">精确的家族键；为 null 时使用通用流体家族或该类型的结构键。</param>
-        /// <param name="batchGroup">纯主线程函数，为每个实体返回稳定的渲染分组；在几何放置期间求值。</param>
-        /// <param name="directionMode">连接方向；共享库存使用对称连接。</param>
-        /// <exception cref="ArgumentNullException">原型为 null。</exception>
-        /// <exception cref="ArgumentOutOfRangeException">原型 ID、行为或方向模式无效。</exception>
-        /// <exception cref="ArgumentException">局部名称无效，或行为、方向与外观的组合无效。</exception>
-        public PipeTypeDefinition(
+        /// <summary>定义参与无向共享库存的管道类型。</summary>
+        /// <param name="localName">稳定的局部类型名。</param>
+        /// <param name="prototype">扩展独立注册的正数 ID 物品原型。</param>
+        /// <param name="appearance">不可变外观；null 使用默认管道外观。</param>
+        /// <param name="connectionFamily">共享连接家族；null 使用通用库存家族。</param>
+        /// <param name="geometry">世界空间尺寸；null 使用标准管道尺寸。</param>
+        /// <returns>供 PipeTypes.Register 使用的不可变定义。</returns>
+        /// <exception cref="ArgumentNullException">prototype 为 null。</exception>
+        /// <exception cref="ArgumentOutOfRangeException">物品 ID 无效。</exception>
+        /// <exception cref="ArgumentException">名称或外观与共享库存规则不符。</exception>
+        public static PipeTypeDefinition CreateSharedInventory(
+            string localName,
+            ItemProto prototype,
+            PipeAppearance appearance = null,
+            string connectionFamily = null,
+            PipeGeometryProfile geometry = null
+        ) =>
+            new PipeTypeDefinition(
+                localName,
+                prototype,
+                appearance,
+                PipeBehavior.SharedInventory,
+                connectionFamily,
+                null,
+                PipeDirectionMode.Undirected,
+                geometry,
+                PipeConstructionMode.Pipe
+            );
+
+        /// <summary>定义由扩展维护运行行为的程序化管道结构。</summary>
+        /// <param name="localName">稳定的局部类型名。</param>
+        /// <param name="prototype">扩展独立注册的正数 ID 物品原型。</param>
+        /// <param name="appearance">不可变外观；开放管壁需要结构截面。</param>
+        /// <param name="directionMode">连接方向；默认无向。</param>
+        /// <param name="constructionMode">规划与碰撞流程；NativeBelt 要求 Directed。</param>
+        /// <param name="connectionFamily">连接家族；null 使用该类型的完整键。</param>
+        /// <param name="batchGroup">主线程纯函数，提供稳定的渲染语义分组。</param>
+        /// <param name="geometry">世界空间尺寸；null 使用标准管道尺寸。</param>
+        /// <returns>供 PipeTypes.Register 使用的不可变定义。</returns>
+        /// <exception cref="ArgumentNullException">prototype 为 null。</exception>
+        /// <exception cref="ArgumentOutOfRangeException">枚举参数或物品 ID 无效。</exception>
+        /// <exception cref="ArgumentException">名称、外观对称性或建造与方向组合无效。</exception>
+        public static PipeTypeDefinition CreateStructure(
+            string localName,
+            ItemProto prototype,
+            PipeAppearance appearance = null,
+            PipeDirectionMode directionMode = PipeDirectionMode.Undirected,
+            PipeConstructionMode constructionMode = PipeConstructionMode.Pipe,
+            string connectionFamily = null,
+            Func<PlanetFactory, int, int> batchGroup = null,
+            PipeGeometryProfile geometry = null
+        ) =>
+            new PipeTypeDefinition(
+                localName,
+                prototype,
+                appearance,
+                PipeBehavior.Structure,
+                connectionFamily,
+                batchGroup,
+                directionMode,
+                geometry,
+                constructionMode
+            );
+
+        private PipeTypeDefinition(
             string localName,
             ItemProto prototype,
             PipeAppearance appearance,
             PipeBehavior behavior,
             string connectionFamily,
             Func<PlanetFactory, int, int> batchGroup,
-            PipeDirectionMode directionMode
-        )
-            : this(
-                localName,
-                prototype,
-                appearance,
-                behavior,
-                connectionFamily,
-                batchGroup,
-                directionMode,
-                null
-            ) { }
-
-        /// <summary>定义由物品承载的程序化连接。</summary>
-        /// <param name="localName">包含小写 ASCII 字母、数字、点、下划线或连字符的稳定局部标识符。</param>
-        /// <param name="prototype">由拥有者独立注册、具有正数 ID 的物品原型。</param>
-        /// <param name="appearance">表面设置；为 null 时继承默认外观。开放表面要求结构内芯。无向内芯在横向 X 反转下逐一匹配构件，同时保持径向 Y。</param>
-        /// <param name="behavior">共享库存或外部模拟的结构连接。</param>
-        /// <param name="connectionFamily">精确的家族键；为 null 时使用通用流体家族或该类型的结构键。</param>
-        /// <param name="batchGroup">纯主线程函数，为每个实体返回稳定的渲染分组；在几何放置期间求值。</param>
-        /// <param name="directionMode">连接方向；共享库存使用对称连接。</param>
-        /// <param name="geometry">管道尺寸；为 null 时使用 <see cref="PipeGeometryProfile.Default"/>。</param>
-        /// <exception cref="ArgumentNullException">原型为 null。</exception>
-        /// <exception cref="ArgumentOutOfRangeException">原型 ID、行为或方向模式无效。</exception>
-        /// <exception cref="ArgumentException">局部名称无效，或行为、方向与外观的组合无效。</exception>
-        public PipeTypeDefinition(
-            string localName,
-            ItemProto prototype,
-            PipeAppearance appearance = null,
-            PipeBehavior behavior = PipeBehavior.SharedInventory,
-            string connectionFamily = null,
-            Func<PlanetFactory, int, int> batchGroup = null,
-            PipeDirectionMode directionMode = PipeDirectionMode.Undirected,
-            PipeGeometryProfile geometry = null
+            PipeDirectionMode directionMode,
+            PipeGeometryProfile geometry,
+            PipeConstructionMode constructionMode
         )
         {
             if (string.IsNullOrWhiteSpace(localName))
@@ -222,6 +204,24 @@ namespace FluidPipes.API
                 );
             }
 
+            if (!Enum.IsDefined(typeof(PipeConstructionMode), constructionMode))
+            {
+                throw new ArgumentOutOfRangeException(nameof(constructionMode));
+            }
+            if (
+                constructionMode == PipeConstructionMode.NativeBelt
+                && (
+                    behavior != PipeBehavior.Structure
+                    || directionMode != PipeDirectionMode.Directed
+                )
+            )
+            {
+                throw new ArgumentException(
+                    "Native belt construction requires a directed structure.",
+                    nameof(constructionMode)
+                );
+            }
+            ConstructionMode = constructionMode;
             DirectionMode = directionMode;
             LocalName = localName;
             Prototype = prototype;

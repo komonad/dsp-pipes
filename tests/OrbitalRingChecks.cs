@@ -11,7 +11,7 @@ using UnityEngine;
 [BepInPlugin("local.fluidpipes.orbitalring.checks", "Fluid Pipes OrbitalRing Checks", "1.0.0")]
 [BepInDependency(PipeApi.PluginGuid)]
 [BepInDependency(OrbitalRingGuid, BepInDependency.DependencyFlags.SoftDependency)]
-public sealed partial class OrbitalRingChecks : BaseUnityPlugin
+public sealed class OrbitalRingChecks : BaseUnityPlugin
 {
     private const string OrbitalRingGuid = "org.ProfessorCat305.OrbitalRing";
     private const int InfiniteTankItemId = 6223;
@@ -53,22 +53,6 @@ public sealed partial class OrbitalRingChecks : BaseUnityPlugin
         Application.runInBackground = true;
         startupTime = Time.realtimeSinceStartup;
         new Harmony("local.fluidpipes.orbitalring.checks").PatchAll(typeof(OrbitalRingChecks));
-        if (
-            NativeOrbitalBelts
-            && Chainloader.PluginInfos.TryGetValue(OrbitalRingGuid, out var nativeOrbitalRing)
-        )
-        {
-            Type integration = nativeOrbitalRing
-                .Instance.GetType()
-                .Assembly.GetType("ProjectOrbitalRing.Compatibility.OrbitalPipeIntegration", true);
-            new Harmony("local.fluidpipes.orbitalring.native-render").Patch(
-                AccessTools.Method(integration, "Register"),
-                prefix: new HarmonyMethod(
-                    typeof(OrbitalRingChecks),
-                    nameof(KeepNativeOrbitalModels)
-                )
-            );
-        }
         Record(
             "LOADED OrbitalRing="
                 + (
@@ -87,8 +71,6 @@ public sealed partial class OrbitalRingChecks : BaseUnityPlugin
         __result = true;
         return false;
     }
-
-    private static bool KeepNativeOrbitalModels() => false;
 
     [HarmonyPostfix, HarmonyPatch(typeof(VFPreload), "Update")]
     private static void Preload(VFPreload __instance)
@@ -134,22 +116,8 @@ public sealed partial class OrbitalRingChecks : BaseUnityPlugin
             )
             {
                 tested = true;
-                if (Environment.GetEnvironmentVariable("FluidPipesOrbitalAppearance") == "1")
-                {
-                    PrepareOrbitalAppearance();
-                    StartCoroutine(CaptureOrbitalAppearance());
-                    return;
-                }
                 RunChecks();
-                if (Environment.GetEnvironmentVariable("FluidPipesOrbitalComponents") == "1")
-                {
-                    RunOrbitalComponentChecks();
-                    StartCoroutine(CaptureOrbitalComponents());
-                }
-                else
-                {
-                    Finish(null);
-                }
+                Finish(null);
             }
         }
         catch (Exception error)

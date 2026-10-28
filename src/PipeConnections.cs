@@ -849,7 +849,10 @@ namespace FluidPipes
 
         private static int Filter(BuildTool_Path tool, UnityEngine.Collider[] colliders, int count)
         {
-            if (!PipeTypeRegistry.UsesPipeConstruction(tool.handItem?.ID))
+            if (
+                !PipeTypeRegistry.UsesPipeConstruction(tool.handItem?.ID)
+                || tool.planet?.physics == null
+            )
             {
                 return count;
             }

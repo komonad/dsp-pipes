@@ -118,6 +118,17 @@ namespace FluidPipes.API
         private static int[] NativeNeighbors(PlanetFactory factory, int entityId, bool? outgoing)
         {
             var neighbors = new List<int>(4);
+            CopyNativeNeighbors(factory, entityId, outgoing, neighbors);
+            return neighbors.ToArray();
+        }
+
+        private static int CopyNativeNeighbors(
+            PlanetFactory factory,
+            int entityId,
+            bool? outgoing,
+            List<int> neighbors
+        )
+        {
             for (int slot = 0; slot < 4; slot++)
             {
                 if (
@@ -137,7 +148,102 @@ namespace FluidPipes.API
                     neighbors.Add(other);
                 }
             }
-            return neighbors.ToArray();
+            return neighbors.Count;
+        }
+
+        /// <summary>将直接邻居写入调用方可复用的缓冲区。</summary>
+        /// <param name="factory">所属工厂；使用主线程或工厂独占访问。</param>
+        /// <param name="entityId">已完成的程序化连接实体。</param>
+        /// <param name="destination">先清空再填入结果；容量充足时沿用现有存储。</param>
+        /// <returns>写入的节点数；无效目标清空缓冲区并返回零。</returns>
+        /// <exception cref="ArgumentNullException">destination 为 null。</exception>
+        public static int CopyNeighbors(
+            PlanetFactory factory,
+            int entityId,
+            List<int> destination
+        ) => CopyNeighbors(factory, entityId, destination, null);
+
+        /// <summary>将输入邻居写入可复用缓冲区；无向类型读取全部邻居。</summary>
+        /// <param name="factory">所属工厂；使用主线程或工厂独占访问。</param>
+        /// <param name="entityId">已完成的程序化连接实体。</param>
+        /// <param name="destination">先清空再填入结果；容量充足时沿用现有存储。</param>
+        /// <returns>写入的节点数；无效目标清空缓冲区并返回零。</returns>
+        /// <exception cref="ArgumentNullException">destination 为 null。</exception>
+        public static int CopyIncomingNeighbors(
+            PlanetFactory factory,
+            int entityId,
+            List<int> destination
+        ) => CopyNeighbors(factory, entityId, destination, false);
+
+        /// <summary>将输出邻居写入可复用缓冲区；无向类型读取全部邻居。</summary>
+        /// <param name="factory">所属工厂；使用主线程或工厂独占访问。</param>
+        /// <param name="entityId">已完成的程序化连接实体。</param>
+        /// <param name="destination">先清空再填入结果；容量充足时沿用现有存储。</param>
+        /// <returns>写入的节点数；无效目标清空缓冲区并返回零。</returns>
+        /// <exception cref="ArgumentNullException">destination 为 null。</exception>
+        public static int CopyOutgoingNeighbors(
+            PlanetFactory factory,
+            int entityId,
+            List<int> destination
+        ) => CopyNeighbors(factory, entityId, destination, true);
+
+        private static int CopyNeighbors(
+            PlanetFactory factory,
+            int entityId,
+            List<int> destination,
+            bool? outgoing
+        )
+        {
+            if (destination == null)
+            {
+                throw new ArgumentNullException(nameof(destination));
+            }
+            destination.Clear();
+            if (!PipeApi.IsPipe(factory, entityId))
+            {
+                return 0;
+            }
+            return PipeTypeRegistry.IsUndirected(factory.entityPool[entityId].protoId)
+                ? PipeRuntime.Bind(factory.cargoTraffic).CopyLinks(entityId, destination)
+                : CopyNativeNeighbors(factory, entityId, outgoing, destination);
+        }
+
+        /// <summary>将弱连通分量写入可复用缓冲区，开销与分量大小成正比。</summary>
+        /// <param name="factory">所属工厂；使用主线程或工厂独占访问。</param>
+        /// <param name="entityId">已完成的程序化连接实体。</param>
+        /// <param name="destination">先清空再填入结果；容量充足时沿用现有存储。</param>
+        /// <returns>写入的节点数；无效目标清空缓冲区并返回零。</returns>
+        /// <exception cref="ArgumentNullException">destination 为 null。</exception>
+        public static int CopyConnectedNodes(
+            PlanetFactory factory,
+            int entityId,
+            List<int> destination
+        )
+        {
+            if (destination == null)
+            {
+                throw new ArgumentNullException(nameof(destination));
+            }
+            destination.Clear();
+            return PipeApi.IsPipe(factory, entityId)
+                ? PipeRuntime.Bind(factory.cargoTraffic).CopyMembers(entityId, destination)
+                : 0;
+        }
+
+        /// <summary>读取工厂当前的拓扑版本，供连接查询缓存使用。</summary>
+        /// <param name="factory">所属工厂；使用主线程或工厂独占访问。</param>
+        /// <param name="version">当前版本；无效目标返回零。</param>
+        /// <returns>库已就绪且工厂可用时返回 true。</returns>
+        /// <remarks>版本通过缓存读取，开销为 O(1)。版本在同一工厂的运行时图生命周期内有效；载入存档或更换工厂时重新建立缓存。</remarks>
+        public static bool TryGetTopologyVersion(PlanetFactory factory, out long version)
+        {
+            version = 0;
+            if (!PipeApi.IsReady || factory?.cargoTraffic?.container == null)
+            {
+                return false;
+            }
+            version = PipeRuntime.Bind(factory.cargoTraffic).TopologyVersion;
+            return true;
         }
 
         /// <summary>在主线程或工厂独占访问下以 O(分量大小) 的开销读取连接分量。有向类型返回其弱连通分量。</summary>
