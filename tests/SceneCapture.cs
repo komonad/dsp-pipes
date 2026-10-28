@@ -26,6 +26,7 @@ public sealed partial class SceneCapture : BaseUnityPlugin
     private Vector3 cameraTarget;
     private Vector3? cameraUp;
     private bool orthographicCapture;
+    private float captureOrthographicSize = 1.5f;
     private RenderTexture target;
     private int pipes;
     private int belts;
@@ -37,6 +38,8 @@ public sealed partial class SceneCapture : BaseUnityPlugin
     private bool structuresOnly;
     private bool gameplayOnly;
     private bool insertersOnly;
+    private bool solidsGalleryOnly;
+    private bool inserterGalleryOnly;
     private bool minimalLineOnly;
     private bool parallelLineOnly;
     private bool machinePortsOnly;
@@ -62,6 +65,10 @@ public sealed partial class SceneCapture : BaseUnityPlugin
         structuresOnly = Environment.GetEnvironmentVariable("FluidPipesCapture") == "structures";
         gameplayOnly = Environment.GetEnvironmentVariable("FluidPipesCapture") == "gameplay";
         insertersOnly = Environment.GetEnvironmentVariable("FluidPipesCapture") == "inserters";
+        solidsGalleryOnly =
+            Environment.GetEnvironmentVariable("FluidPipesCapture") == "solids-gallery";
+        inserterGalleryOnly =
+            Environment.GetEnvironmentVariable("FluidPipesCapture") == "inserter-gallery";
         minimalLineOnly = Environment.GetEnvironmentVariable("FluidPipesCapture") == "minimal-line";
         parallelLineOnly =
             Environment.GetEnvironmentVariable("FluidPipesCapture") == "parallel-line";
@@ -126,7 +133,15 @@ public sealed partial class SceneCapture : BaseUnityPlugin
     ]
     private static bool CaptureHover(PlayerAction_Inspect __instance)
     {
-        if (instance == null || !(instance.parallelLineOnly || instance.machinePortsOnly))
+        if (
+            instance == null
+            || !(
+                instance.parallelLineOnly
+                || instance.machinePortsOnly
+                || instance.solidsGalleryOnly
+                || instance.inserterGalleryOnly
+            )
+        )
             return true;
         __instance.hoveringEntityId = __instance.hoveringPrebuildId = 0;
         return false;
@@ -142,6 +157,8 @@ public sealed partial class SceneCapture : BaseUnityPlugin
                 || instance.copperInteractionsOnly
                 || instance.windowPipePreviewOnly
                 || instance.powerBuildingReferenceOnly
+                || instance.solidsGalleryOnly
+                || instance.inserterGalleryOnly
             )
             && __instance.languageSelectGroup.gameObject.activeSelf
         )
@@ -152,6 +169,12 @@ public sealed partial class SceneCapture : BaseUnityPlugin
         __instance.time = __instance.splashTime + 1;
         __instance.musicReached = true;
         __instance.clicked = true;
+    }
+
+    [HarmonyPrefix, HarmonyPatch(typeof(PlayerControlGizmo), "OnOutlineDraw")]
+    private static bool ShowcaseOutline()
+    {
+        return instance == null || !(instance.solidsGalleryOnly || instance.inserterGalleryOnly);
     }
 
     [HarmonyPostfix, HarmonyPatch(typeof(GameCamera), nameof(GameCamera.FrameLogic))]
@@ -170,11 +193,15 @@ public sealed partial class SceneCapture : BaseUnityPlugin
         camera.orthographic = instance.orthographicCapture;
         if (instance.orthographicCapture)
         {
-            camera.orthographicSize = 1.5f;
+            camera.orthographicSize = instance.captureOrthographicSize;
         }
         camera.fieldOfView = 42;
         camera.aspect = 16f / 9;
         camera.targetTexture = instance.target;
+        if (instance.solidsGalleryOnly || instance.inserterGalleryOnly)
+        {
+            camera.ResetProjectionMatrix();
+        }
     }
 
     private void Update()
@@ -579,7 +606,15 @@ public sealed partial class SceneCapture : BaseUnityPlugin
             Quaternion.LookRotation(north, up),
             new Bounds(
                 Vector3.zero,
-                new Vector3(parallelLineOnly ? 62 : 38, 1, parallelLineOnly ? 40 : 34)
+                new Vector3(
+                    solidsGalleryOnly || inserterGalleryOnly ? 100
+                        : parallelLineOnly ? 62
+                        : 38,
+                    1,
+                    solidsGalleryOnly || inserterGalleryOnly ? 150
+                        : parallelLineOnly ? 40
+                        : 34
+                )
             ),
             6,
             1,
@@ -591,15 +626,27 @@ public sealed partial class SceneCapture : BaseUnityPlugin
         for (int entityId = 1; entityId < planet.data.vegeCursor; entityId++)
             if (
                 planet.data.vegePool[entityId].id == entityId
-                && (planet.data.vegePool[entityId].pos - center).sqrMagnitude < 900
+                && (planet.data.vegePool[entityId].pos - center).sqrMagnitude
+                    < (solidsGalleryOnly || inserterGalleryOnly ? 14400 : 900)
             )
                 factory.RemoveVegeWithComponents(entityId);
         for (int entityId2 = 1; entityId2 < planet.data.veinCursor; entityId2++)
             if (
                 planet.data.veinPool[entityId2].id == entityId2
-                && (planet.data.veinPool[entityId2].pos - center).sqrMagnitude < 900
+                && (planet.data.veinPool[entityId2].pos - center).sqrMagnitude
+                    < (solidsGalleryOnly || inserterGalleryOnly ? 14400 : 900)
             )
                 factory.RemoveVeinWithComponents(entityId2);
+        if (solidsGalleryOnly)
+        {
+            CreateSolidsGallery();
+            return;
+        }
+        if (inserterGalleryOnly)
+        {
+            CreateInserterGallery();
+            return;
+        }
         if (powerBuildingReferenceOnly)
         {
             CreatePowerBuildingReference();
@@ -1500,6 +1547,16 @@ public sealed partial class SceneCapture : BaseUnityPlugin
     {
         for (int frame = 0; frame < 150; frame++)
             yield return null;
+        if (solidsGalleryOnly || inserterGalleryOnly)
+        {
+            var gallery = solidsGalleryOnly ? CaptureSolidsGallery() : CaptureInserterGallery();
+            while (gallery.MoveNext())
+            {
+                yield return gallery.Current;
+            }
+            Finish(null);
+            yield break;
+        }
         if (powerBuildingReferenceOnly)
         {
             var reference = CapturePowerBuildingReference();
@@ -1737,7 +1794,7 @@ public sealed partial class SceneCapture : BaseUnityPlugin
     private void SaveImage(string name, bool includeUI = false)
     {
         CameraPose();
-        if (parallelLineOnly)
+        if (parallelLineOnly || solidsGalleryOnly || inserterGalleryOnly)
         {
             factory.planet.factoryModel.drawPowerArc = factory.planet.factoryModel.drawPowerConn =
                 false;
@@ -1816,6 +1873,8 @@ public sealed partial class SceneCapture : BaseUnityPlugin
                     && !parallelLineOnly
                     && !machinePortsOnly
                         ? "inspect-results.txt"
+                    : solidsGalleryOnly ? "solids-gallery-results.txt"
+                    : inserterGalleryOnly ? "inserter-gallery-results.txt"
                     : machinePortsOnly ? "machine-ports-results.txt"
                     : copperInteractionsOnly ? "copper-interactions-results.txt"
                     : parallelLineOnly ? "parallel-line-results.txt"

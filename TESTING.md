@@ -28,11 +28,21 @@ pwsh -NoProfile -File tests/run-machine-ports.ps1
 
 性能测量的负载、范围和限制见[性能测量](tests/PERFORMANCE.md)。交互帧率、蓝图和第三方运输补丁需要在实际游戏中验证。
 
-## 示例存档
+## 产线场景
 
-[硫酸产线](samples/minimal-fluid-line/README.md) 使用三个独立液体网和一条石矿传送带，稳定产量为 40 硫酸/分钟。[平行产线](samples/parallel-fluid-line/README.md) 使用三座塑料化工厂、共享精炼油环网和并行传送带，稳定总产量为 60 塑料/分钟，并包含独立的管道到传送带展示装置。
+[硫酸产线](tests/MinimalFluidLineScene.cs) 使用三个独立液体网和一条石矿传送带，稳定产量为 40 硫酸/分钟。[平行产线](tests/ParallelFluidLineScene.cs) 使用三座塑料化工厂、共享精炼油环网和并行传送带，稳定总产量为 60 塑料/分钟，并包含独立的管道到传送带展示装置。
 
-将同名 `.dsv` 和 `.moddsv` 一起复制到游戏存档目录，使用配套插件加载并开启沙盒工具。两个存档的玩家都位于产线南侧，原料物流塔使用沙盒无限供应，产物物流塔使用沙盒无限回收。各目录的 README 提供重新生成和重载验证命令。
+在仓库根目录生成场景并检查存档重载：
+
+```powershell
+$sceneOutput = 'obj/scene-capture/profile/BepInEx/plugins/scene-output'
+pwsh -NoProfile -File tests/capture-scene.ps1 -MinimalLine
+pwsh -NoProfile -File tests/capture-scene.ps1 -MinimalLine -InspectSave "$sceneOutput/minimal-fluid-line.dsv"
+pwsh -NoProfile -File tests/capture-scene.ps1 -ParallelLine
+pwsh -NoProfile -File tests/capture-scene.ps1 -ParallelLine -InspectSave "$sceneOutput/parallel-fluid-line.dsv"
+```
+
+生成的 `.dsv`、`.moddsv` 与检查报告位于 `$sceneOutput`；截图和报告同时复制到 `screenshots/ingame/`。手动加载时，将同名 `.dsv` 和 `.moddsv` 一起复制到游戏存档目录，安装生成场景时使用的插件及依赖，并开启沙盒工具。两个存档的玩家都位于产线南侧，原料物流塔使用沙盒无限供应，产物物流塔使用沙盒无限回收。
 
 ## 手动验证
 

@@ -19,7 +19,6 @@ Local.props
 screenshots/
 artifacts/performance-*/
 tests/*-results.txt
-samples/**/*-results.txt
 
 # 编辑器、IDE 与系统文件
 .vs/

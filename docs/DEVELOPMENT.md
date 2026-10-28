@@ -33,10 +33,10 @@ dotnet build tests/SceneCapture.csproj -c Release
 
 ```powershell
 pwsh -NoProfile -File tests/capture-scene.ps1 -ParallelLine
-pwsh -NoProfile -File tests/capture-scene.ps1 -ParallelLine -InspectSave samples/parallel-fluid-line/parallel-fluid-line.dsv
+pwsh -NoProfile -File tests/capture-scene.ps1 -ParallelLine -InspectSave obj/scene-capture/profile/BepInEx/plugins/scene-output/parallel-fluid-line.dsv
 ```
 
-并行夹具包含三座塑料化工厂、沙盒源/汇物流塔以及并行的管道/传送带通道。它检查稳定生产、数量守恒、管道到传送带的分拣器转移和原生建造栏选择。其它测试装置模式覆盖几何、连接模式、立方体管网、阀门交互和分拣器外观。
+并行夹具包含三座塑料化工厂、沙盒源/汇物流塔以及并行的管道/传送带通道。它检查稳定生产、数量守恒、管道到传送带的分拣器转移和原生建造栏选择。存档和配套 mod 数据保存在 `obj/scene-capture/profile/BepInEx/plugins/scene-output/`，截图与报告同时复制到 `screenshots/ingame/`。其它测试装置模式覆盖几何、连接模式、立方体管网、阀门交互和分拣器外观。
 
 性能报告标明运行时、工作负载和所测量的 CPU 阶段。交互式帧率评估需要完整加载的工厂和帧级测量。运行时检查先通过已知分配验证分配计数器；验证失败时标记为不可用，物理货物数量另行校验。参见[性能测量](../tests/PERFORMANCE.md)。
 

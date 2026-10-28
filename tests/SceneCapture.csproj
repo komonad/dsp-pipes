@@ -8,6 +8,9 @@
     </PropertyGroup>
     <ItemGroup>
         <Compile Include="SceneCapture.cs" />
+        <Compile Include="ShowcaseScene.cs" />
+        <Compile Include="SolidsGalleryScene.cs" />
+        <Compile Include="InserterGalleryScene.cs" />
         <Compile Include="FluidGameplayScene.cs" />
         <Compile Include="FluidInserterScene.cs" />
         <Compile Include="MinimalFluidLineScene.cs" />

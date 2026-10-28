@@ -33,10 +33,10 @@ The scene harness creates an isolated sandbox, covers the planet with native fou
 
 ```powershell
 pwsh -NoProfile -File tests/capture-scene.ps1 -ParallelLine
-pwsh -NoProfile -File tests/capture-scene.ps1 -ParallelLine -InspectSave samples/parallel-fluid-line/parallel-fluid-line.dsv
+pwsh -NoProfile -File tests/capture-scene.ps1 -ParallelLine -InspectSave obj/scene-capture/profile/BepInEx/plugins/scene-output/parallel-fluid-line.dsv
 ```
 
-The parallel fixture contains three plastic chemical plants, sandbox source/sink towers and parallel pipe/belt lanes. It checks stable production, count conservation, pipe-to-belt inserter transfer and native construction-bar selection. Other harness modes cover geometry, connection patterns, cube networks, valve interaction and inserter appearance.
+The parallel fixture contains three plastic chemical plants, sandbox source/sink towers and parallel pipe/belt lanes. It checks stable production, count conservation, pipe-to-belt inserter transfer and native construction-bar selection. Saves and companion mod data remain in `obj/scene-capture/profile/BepInEx/plugins/scene-output/`; screenshots and reports are also copied to `screenshots/ingame/`. Other harness modes cover geometry, connection patterns, cube networks, valve interaction and inserter appearance.
 
 Performance reports identify the runtime, workload and measured CPU stages. Interactive frame-rate assessment requires a complete loaded factory and frame-level measurements. Runtime checks validate the allocation counter with a known allocation before using it; a failed validation marks the counter as unavailable. Physical cargo counts are checked separately. See [performance measurement](../tests/PERFORMANCE.en.md).
 
