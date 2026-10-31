@@ -1879,6 +1879,8 @@ public sealed partial class SceneCapture : BaseUnityPlugin
                     : copperInteractionsOnly ? "copper-interactions-results.txt"
                     : parallelLineOnly ? "parallel-line-results.txt"
                     : minimalLineOnly ? "minimal-line-results.txt"
+                    : insertersOnly && !FluidInserterVisuals.Enabled
+                        ? "native-inserters-results.txt"
                     : insertersOnly ? "inserters-results.txt"
                     : gameplayOnly ? "gameplay-results.txt"
                     : structuresOnly ? "structures-results.txt"

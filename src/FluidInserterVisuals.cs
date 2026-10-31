@@ -87,6 +87,7 @@ namespace FluidPipes
         private static readonly Material[] accents = new Material[5];
         private static readonly Material[] arrows = new Material[5];
         private static readonly MaterialPropertyBlock arrowProperties = new MaterialPropertyBlock();
+        internal static bool Enabled { get; set; } = true;
         public static int Rebuilds { get; private set; }
         public static int Count => shapes.Count;
 
@@ -274,7 +275,7 @@ namespace FluidPipes
 
         public static void Refresh(PlanetFactory factory, int obj)
         {
-            if (factory != current || obj <= 0)
+            if (!Enabled || factory != current || obj <= 0)
             {
                 return;
             }
@@ -604,7 +605,7 @@ namespace FluidPipes
 
         public static void Draw(PlanetFactory factory, Camera camera)
         {
-            if (factory?.factorySystem == null || camera == null)
+            if (!Enabled || factory?.factorySystem == null || camera == null)
             {
                 return;
             }
@@ -634,7 +635,8 @@ namespace FluidPipes
         {
             var factory = renderer.manager?.activeFactory;
             if (
-                renderer.isPrebuild
+                !Enabled
+                || renderer.isPrebuild
                 || factory == null
                 || index <= 0
                 || index >= renderer.instPool.Length

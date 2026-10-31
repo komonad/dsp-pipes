@@ -18,6 +18,8 @@ pwsh -NoProfile -File tests/run.ps1
 pwsh -NoProfile -File tests/run.ps1 -WithoutExtensions
 pwsh -NoProfile -File tests/run-copper-interactions.ps1
 pwsh -NoProfile -File tests/run-machine-ports.ps1
+pwsh -NoProfile -File tests/capture-scene.ps1 -Inserters
+pwsh -NoProfile -File tests/capture-scene.ps1 -Inserters -NativeInserters
 ```
 
 核心检查覆盖连通性、库存与增产点守恒、序列化、随机操作和并发 I/O。运行时检查覆盖公开 API 文档、独立物品注册、有向与无向连接、材质生命周期、UV 接缝、管径与碰撞，以及 100,000 节点存取和 10,000 个原生分拣器负载。
@@ -27,6 +29,8 @@ pwsh -NoProfile -File tests/run-machine-ports.ps1
 铜管交互脚本使用原生建造工具，覆盖玻璃管与铜管的路线方向、高度和正反拖建；检查单点预览、整线格点、待建标记、建成姿态、拆除悬停标记及分拣器附着框。报告和截图位于 `screenshots/copper-interactions/`。机器直连脚本覆盖配方输入、产物提取、背压、筛选、持久化、管网面板和沙盒阀门，报告及截图位于 `screenshots/machine-ports/`。
 
 性能测量的负载、范围和限制见[性能测量](tests/PERFORMANCE.md)。交互帧率、蓝图和第三方运输补丁需要在实际游戏中验证。
+
+分拣器场景分别以管式模型和原生模型启动，检查原生显示归属、碰撞与用电组件、实际运输及库存守恒。`-NativeInserters` 使用关闭改模的隔离配置，退出后恢复该测试 profile 的配置文件。
 
 ## 产线场景
 

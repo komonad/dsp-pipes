@@ -133,7 +133,7 @@ private void OnDestroy()
 }
 ```
 
-物品准入规则为：`(默认流体 ∪ 配置允许列表 ∪ mod 注册列表) − 配置禁止列表`。默认流体由 `ItemProto.IsFluid` 标识。禁止列表优先于任何 mod 的注册。`PipeApi.IsItemAllowed(itemId)` 查询最终准入结果；含原生储液罐的空间还有额外限制，见下文。
+物品准入规则为：`(默认准入集合 ∪ 配置允许列表 ∪ mod 注册列表) − 配置禁止列表`。`Transport.AllowAllItems=true` 时，默认准入集合包含所有已注册物品；否则由 `Transport.IncludeFluids` 选择是否包含 `ItemProto.IsFluid` 物品。禁止列表优先于全部物品开关和任何 mod 的注册。`PipeApi.IsItemAllowed(itemId)` 查询最终准入结果；含原生储液罐的空间还有额外限制，见下文。
 
 撤销授权或修改配置后，已保存的物品继续保存在库存中，并可取出。失去准入的物品会在新写入时被拒绝。注册和配置由运行环境管理，接收存档的玩家需要安装相同的依赖 mod 并配置物品规则。
 

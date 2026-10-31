@@ -7,12 +7,14 @@
 EnableMachinePorts = false
 
 [Transport]
+AllowAllItems = false
 IncludeFluids = true
-AllowedItemIds = 1101, 1109
-DeniedItemIds = 1120
+AllowedItemIds =
+DeniedItemIds =
 
 [Appearance]
 MetalFittings = true
+FluidInserterModels = true
 
 [General]
 EnableDebugHotkey = false
@@ -21,15 +23,19 @@ EnableDebugHotkey = false
 | 选项 | 默认 | 含义 |
 | --- | --- | --- |
 | `Integration.EnableMachinePorts` | `false` | 管道直接连接生产机器的分拣器插槽；每个接口可设置方向、物品和启停 |
+| `Transport.AllowAllItems` | `false` | 准入数据库中所有物品，包含固体和其它 mod 注册的物品；禁止列表仍优先 |
 | `Transport.IncludeFluids` | `true` | 默认准入所有 `ItemProto.IsFluid` 物品，包含在原型初始化阶段注册的流体 |
 | `Transport.AllowedItemIds` | 空 | 额外准入的物品 ID，可含固体 |
 | `Transport.DeniedItemIds` | 空 | 拒绝的物品 ID，优先于默认流体、允许列表和 mod 注册 |
 | `Appearance.MetalFittings` | `true` | 转角和分支接头使用不透明金属；关闭后使用透明接头 |
+| `Appearance.FluidInserterModels` | `true` | 已建成且连接管道的分拣器使用管式外观；关闭后保留原生模型，等级、速率、过滤和耗电不变 |
 | `General.EnableDebugHotkey` | `false` | 启用 F8 测试快捷键，领取 200 管道和 20 阀门 |
 
 物品列表接受逗号、分号和空白分隔的正整数；重复 ID 只计一次。准入列表以游戏数据库中存在的物品 ID 为准。若某个列表包含非法词元，该整个列表被忽略，BepInEx 日志会记录配置键和错误词元。
 
-只允许指定物品时，将 `IncludeFluids=false` 并填写 `AllowedItemIds`。例如 `AllowedItemIds=1000,1101` 允许水和铁块；依赖 mod 仍可注册其它物品，明确禁止的 ID 始终优先。
+允许全部物品时，设置 `AllowAllItems=true`，无需逐个填写物品 ID；此时 `IncludeFluids` 不再限制准入。`DeniedItemIds` 仍会排除指定物品，无效或未注册的 ID 始终不会获准。
+
+只允许指定物品时，保持 `AllowAllItems=false`，将 `IncludeFluids=false` 并填写 `AllowedItemIds`。例如 `AllowedItemIds=1000,1101` 允许水和铁块；依赖 mod 仍可注册其它物品，明确禁止的 ID 始终优先。
 
 一个连通空间始终只有一种物品。额外物品按相同的物品类型、容量、堆叠和分拣器速率规则运输。原生储液罐的储存类型为原生流体，因此连接储液罐的空间会拒绝固体写入。物流塔可使用授权物品的储存槽位共享库存。
 

@@ -211,12 +211,95 @@ public sealed partial class SceneCapture
         SetView(0, -2, 20, 23, 6);
     }
 
+    private IEnumerator CaptureNativeInserters()
+    {
+        FluidInserterVisuals.Draw(factory, GameCamera.main);
+        int pipeSorters = 0;
+        for (int id = 1; id < factory.factorySystem.inserterCursor; id++)
+        {
+            var arm = factory.factorySystem.inserterPool[id];
+            if (arm.id != id || !FluidInserterVisuals.UsesPipe(factory, arm.entityId))
+            {
+                continue;
+            }
+            pipeSorters++;
+            var entity = factory.entityPool[arm.entityId];
+            var display = SorterRenderer(arm.entityId).instPool[entity.modelId];
+            if (
+                display.objId == 0
+                || (new Vector3(display.posx, display.posy, display.posz) - entity.pos).sqrMagnitude
+                    > 0.0001f
+                || entity.colliderId <= 0
+                || entity.powerConId <= 0
+            )
+            {
+                throw new InvalidOperationException(
+                    "Disabled pipe models must preserve native inserter instances and components."
+                );
+            }
+        }
+        if (pipeSorters != 5 || FluidInserterVisuals.Count != 0)
+        {
+            throw new InvalidOperationException(
+                "Disabled pipe models retain custom geometry or lose native inserters."
+            );
+        }
+        var graph = PipeRuntime.Bind(factory.cargoTraffic);
+        var beforeSource = PipePools.View(graph, sourcePipe);
+        var beforeDestination = PipePools.View(graph, destinationPipe);
+        int armId = factory.entityPool[fluidSorter].inserterId;
+        var system = factory.factorySystem;
+        var beforeArm = system.inserterPool[armId];
+        for (int tick = 0; tick < 600; tick++)
+        {
+            system
+                .inserterPool[armId]
+                .InternalUpdate(factory, factory.entityNeeds, factory.entityAnimPool, 1);
+        }
+        var source = PipePools.View(graph, sourcePipe);
+        var destination = PipePools.View(graph, destinationPipe);
+        var afterArm = system.inserterPool[armId];
+        if (
+            destination.Count <= beforeDestination.Count
+            || source.Count + destination.Count + afterArm.itemCount
+                != beforeSource.Count + beforeDestination.Count + beforeArm.itemCount
+            || source.ProliferatorPoints + destination.ProliferatorPoints + afterArm.itemInc
+                != beforeSource.ProliferatorPoints
+                    + beforeDestination.ProliferatorPoints
+                    + beforeArm.itemInc
+        )
+        {
+            throw new InvalidOperationException(
+                "Native inserter appearance changes transport or inventory conservation."
+            );
+        }
+        report.Add(
+            "PASS disabled fluid inserter models preserve five native displays, native components, powered transport and inventory conservation."
+        );
+        SaveImage("ingame-native-inserters-overview.png");
+        SetView(-4.5f, -0.6f, 1.9f, 5.6f, 0.5f, 0.65f);
+        for (int frame = 0; frame < 12; frame++)
+        {
+            yield return null;
+        }
+        SaveImage("ingame-native-inserters-closeup.png");
+    }
+
     private InserterRenderer SorterRenderer(int entity) =>
         (InserterRenderer)
             GameMain.gpuiManager.GetObjectRenderer(factory.entityPool[entity].modelIndex);
 
     private IEnumerator CaptureInserters()
     {
+        if (!FluidInserterVisuals.Enabled)
+        {
+            var native = CaptureNativeInserters();
+            while (native.MoveNext())
+            {
+                yield return native.Current;
+            }
+            yield break;
+        }
         FluidInserterVisuals.Draw(factory, GameCamera.main);
         int custom = FluidInserterVisuals.Count;
         if (custom != 5 || FluidInserterVisuals.UsesPipe(factory, nativeSorter))

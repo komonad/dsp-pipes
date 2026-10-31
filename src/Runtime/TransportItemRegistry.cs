@@ -47,6 +47,7 @@ namespace FluidPipes
         private static int[] allowed = new int[0];
         private static int[] denied = new int[0];
         private static bool includeFluids = true;
+        private static bool allowAllItems;
         private static bool ready;
         private static int mainThread;
         private static int version;
@@ -55,12 +56,18 @@ namespace FluidPipes
 
         internal static bool IsAllowed(int itemId) => admission.Allows(itemId);
 
-        internal static void Configure(bool fluids, int[] additions, int[] exclusions)
+        internal static void Configure(
+            bool fluids,
+            bool allItems,
+            int[] additions,
+            int[] exclusions
+        )
         {
             mainThread = Thread.CurrentThread.ManagedThreadId;
             lock (sync)
             {
                 includeFluids = fluids;
+                allowAllItems = allItems;
                 allowed = (int[])additions.Clone();
                 denied = (int[])exclusions.Clone();
                 if (ready)
@@ -116,7 +123,9 @@ namespace FluidPipes
                 .Concat(registrations.SelectMany(registration => registration.Items))
                 .Where(known.Contains);
             admission = new ItemAdmission(
-                items.Where(item => includeFluids && item.IsFluid).Select(item => item.ID),
+                items
+                    .Where(item => allowAllItems || includeFluids && item.IsFluid)
+                    .Select(item => item.ID),
                 additions,
                 denied
             );

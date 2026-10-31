@@ -36,6 +36,22 @@ namespace FluidPipes
                     "Render elbows and multi-branch fittings with opaque steel. Requires a game restart."
                 )
                 .Value;
+            FluidInserterVisuals.Enabled = config
+                .Bind(
+                    "Appearance",
+                    "FluidInserterModels",
+                    true,
+                    "Use pipe-style models for completed inserters connected to pipes. Disable to keep native inserter models. Transport behavior is unchanged. Requires a game restart."
+                )
+                .Value;
+            bool allItems = config
+                .Bind(
+                    "Transport",
+                    "AllowAllItems",
+                    false,
+                    "Allow all registered item prototypes, including solid items. DeniedItemIds still takes priority. Native storage tanks remain fluid-only. Requires a game restart."
+                )
+                .Value;
             bool fluids = config
                 .Bind(
                     "Transport",
@@ -62,6 +78,7 @@ namespace FluidPipes
                 .Value;
             TransportItemRegistry.Configure(
                 fluids,
+                allItems,
                 Parse(include, "AllowedItemIds", log),
                 Parse(exclude, "DeniedItemIds", log)
             );

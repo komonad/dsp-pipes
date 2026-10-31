@@ -27,9 +27,11 @@
 | 配置项 | 默认值 | 用途 |
 | --- | --- | --- |
 | `Integration.EnableMachinePorts` | `false` | 直接连接生产机器的分拣器插槽 |
+| `Transport.AllowAllItems` | `false` | 允许所有已注册物品，包含固体；禁止列表仍优先 |
 | `Transport.IncludeFluids` | `true` | 允许流体物品 |
 | `Transport.AllowedItemIds` | 空 | 额外允许的物品 ID |
 | `Transport.DeniedItemIds` | 空 | 禁止的物品 ID，优先于其它准入规则 |
+| `Appearance.FluidInserterModels` | `true` | 管道端分拣器使用管式外观；关闭后使用原生模型 |
 
 原生储液罐只接受流体。更改准入规则会保留既有库存，并允许继续取出。机器直连启用后，在相连管段的“机器直连接口设置”中选择供料或提取的配方物品。完整选项和星环无尽水罐适配见[配置说明](docs/CONFIGURATION.md)。
 

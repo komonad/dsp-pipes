@@ -103,7 +103,7 @@ public sealed partial class RuntimeChecks
 
             using (PipeApi.RegisterTransportItems(1101))
             {
-                TransportItemRegistry.Configure(false, new[] { 1101, 1000 }, new[] { 1101 });
+                TransportItemRegistry.Configure(false, false, new[] { 1101, 1000 }, new[] { 1101 });
                 Check(
                     PipeApi.IsItemAllowed(1000)
                         && !PipeApi.IsItemAllowed(1007)
@@ -116,7 +116,7 @@ public sealed partial class RuntimeChecks
         {
             firstGrant.Dispose();
             secondGrant.Dispose();
-            TransportItemRegistry.Configure(true, new int[0], new int[0]);
+            TransportItemRegistry.Configure(true, false, new int[0], new int[0]);
         }
 
         using (PipeApi.RegisterTransportItems(1101))
@@ -254,6 +254,75 @@ public sealed partial class RuntimeChecks
                 rejected = true;
             }
             Check(rejected, "API rejects invalid valve rate " + invalid);
+        }
+    }
+
+    private void AllItemTransport()
+    {
+        try
+        {
+            var config = new BepInEx.Configuration.ConfigFile(
+                Path.Combine(Path.GetDirectoryName(Info.Location), "all-item-check.cfg"),
+                false
+            )
+            {
+                SaveOnConfigSet = false,
+            };
+            config.Bind("Transport", "AllowAllItems", false).Value = true;
+            config.Bind("Transport", "IncludeFluids", true).Value = false;
+            config.Bind("Transport", "DeniedItemIds", "").Value = "1101";
+            PipeConfiguration.Load(config, Logger);
+            using (PipeApi.RegisterTransportItems(1101))
+            {
+                Check(
+                    LDB.items.dataArray.All(item =>
+                        PipeApi.IsItemAllowed(item.ID) == (item.ID != 1101)
+                    )
+                        && !PipeApi.IsItemAllowed(0)
+                        && !PipeApi.IsItemAllowed(-1)
+                        && !PipeApi.IsItemAllowed(int.MaxValue),
+                    "all-item admission includes every registered prototype while exclusions override mod grants"
+                );
+            }
+            var factory = Fixture(3, 989990, true);
+            Check(
+                factory.InsertInto(1, 0, 1109, 10, 40, out _) == 10
+                    && !PipeApi.TryInsert(factory, 3, 1007, 1)
+                    && PipeApi.TryTake(factory, 3, 4, out var amount, 1109)
+                    && amount.Count == 4
+                    && amount.ProliferatorPoints == 16,
+                "all-item mode transports solids through native I/O with a single item identity and conserved points"
+            );
+            var tankFactory = Fixture(1, 989991, true);
+            tankFactory.factoryStorage = new FactoryStorage(tankFactory.planet);
+            tankFactory.factoryStorage.tankCursor = 2;
+            tankFactory.factoryStorage.tankPool[1] = new TankComponent
+            {
+                id = 1,
+                entityId = 2,
+                belt0 = 1,
+                fluidCapacity = 10000,
+            };
+            Check(
+                PipeApi.TryGetInventory(tankFactory, 1, out var inventory)
+                    && inventory.RequiresFluid
+                    && !PipeApi.TryInsert(tankFactory, 1, 1109, 1)
+                    && PipeApi.TryInsert(tankFactory, 1, 1000, 1),
+                "all-item admission preserves native tank fluid restrictions"
+            );
+            TransportItemRegistry.Configure(true, false, new int[0], new int[0]);
+            Check(
+                !PipeApi.IsItemAllowed(1109)
+                    && !PipeApi.TryInsert(factory, 1, 1109, 1)
+                    && PipeApi.TryTake(factory, 3, 10, out amount, 1109)
+                    && amount.Count == 6
+                    && amount.ProliferatorPoints == 24,
+                "disabling all-item admission preserves existing solid stock for extraction"
+            );
+        }
+        finally
+        {
+            TransportItemRegistry.Configure(true, false, new int[0], new int[0]);
         }
     }
 

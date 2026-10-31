@@ -282,6 +282,7 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
         Test("core in Unity Mono", () => results.Add(CoreSuite.Run(false)));
         Test("documented public API", ApiDocumentation);
         Test("public API and configurable item transport", ApiIntegration);
+        Test("all-item transport configuration", AllItemTransport);
         Test("registered pipe type definitions and lifecycle", PipeTypeRegistration);
         Test("typed pipe inventory and connection families", PipeTypeInventory);
         Test("directed structural topology and persistence", DirectedPipeTypeTopology);
