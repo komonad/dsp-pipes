@@ -16,9 +16,6 @@ namespace FluidPipes.API
         /// <summary>用于最低版本依赖声明的 mod 发行版本。</summary>
         public const string ModVersion = "0.11.0";
 
-        /// <summary>受支持的 API 契约代数。</summary>
-        public const int ApiVersion = 2;
-
         /// <summary>原型与初始物品策略是否已初始化。</summary>
         public static bool IsReady => Prototypes.Ready;
 

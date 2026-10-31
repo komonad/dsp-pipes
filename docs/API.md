@@ -28,7 +28,7 @@ public sealed class ConsumerPlugin : BaseUnityPlugin
 
 Fluid Pipes 的 GUID 是 `com.komonad.dsp.fluidpipes`。运行时需要安装 Fluid Pipes 及其依赖 BepInEx 5、CommonAPI、LDBTool、DSPModSave。仓库中的 [可编译示例](../examples/PipeConsumer/PipeConsumer.csproj) 展示依赖声明、注册生命周期和存取方式。
 
-`PipeApi.ModVersion` 是插件版本，`PipeApi.ApiVersion` 是接口契约标识。依赖声明使用 `PipeApi.ModVersion`，与编译时引用的程序集保持一致。
+依赖声明中的 `PipeApi.ModVersion` 在编译时固定为所引用库的插件版本，供 BepInEx 检查最低依赖版本。
 
 类型定义通过 `PipeTypeDefinition.CreateSharedInventory` 或 `CreateStructure` 创建。外观使用一个 `PipeAppearance` 构造器，支持工厂感知的纹理坐标和 `receiveShadows` 设置。
 

@@ -42,9 +42,9 @@ public sealed partial class RuntimeChecks
                     .Cast<BepInDependency>()
                     .Any(dependency =>
                         dependency.DependencyGUID == PipeApi.PluginGuid
-                        && dependency.MinimumVersion.Equals(new System.Version(0, 11, 0))
+                        && dependency.MinimumVersion.Equals(new System.Version(PipeApi.ModVersion))
                     ),
-            "the copper consumer declares its API v2 library dependency"
+            "the copper consumer declares its compiled FluidPipes dependency version"
         );
         Check(
             PipeTypes.TryGet(CopperConsumerGuid + ":copper", out var copper)
