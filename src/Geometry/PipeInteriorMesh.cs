@@ -527,6 +527,11 @@ namespace FluidPipes
             {
                 side = Vector3.Cross(tangent, Vector3.forward);
             }
+            // 径向参考轴越过切线时可能反向；相邻截面保持同一半球，防止管壁扭转收缩。
+            if (previousSide.sqrMagnitude > 0 && Vector3.Dot(side, previousSide) < 0)
+            {
+                side = -side;
+            }
             return side.normalized;
         }
     }

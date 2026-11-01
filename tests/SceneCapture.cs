@@ -39,6 +39,7 @@ public sealed partial class SceneCapture : BaseUnityPlugin
     private bool gameplayOnly;
     private bool insertersOnly;
     private bool solidsGalleryOnly;
+    private bool wondersGalleryOnly;
     private bool inserterGalleryOnly;
     private bool minimalLineOnly;
     private bool parallelLineOnly;
@@ -67,6 +68,8 @@ public sealed partial class SceneCapture : BaseUnityPlugin
         insertersOnly = Environment.GetEnvironmentVariable("FluidPipesCapture") == "inserters";
         solidsGalleryOnly =
             Environment.GetEnvironmentVariable("FluidPipesCapture") == "solids-gallery";
+        wondersGalleryOnly =
+            Environment.GetEnvironmentVariable("FluidPipesCapture") == "wonders-gallery";
         inserterGalleryOnly =
             Environment.GetEnvironmentVariable("FluidPipesCapture") == "inserter-gallery";
         minimalLineOnly = Environment.GetEnvironmentVariable("FluidPipesCapture") == "minimal-line";
@@ -139,6 +142,7 @@ public sealed partial class SceneCapture : BaseUnityPlugin
                 instance.parallelLineOnly
                 || instance.machinePortsOnly
                 || instance.solidsGalleryOnly
+                || instance.wondersGalleryOnly
                 || instance.inserterGalleryOnly
             )
         )
@@ -158,6 +162,7 @@ public sealed partial class SceneCapture : BaseUnityPlugin
                 || instance.windowPipePreviewOnly
                 || instance.powerBuildingReferenceOnly
                 || instance.solidsGalleryOnly
+                || instance.wondersGalleryOnly
                 || instance.inserterGalleryOnly
             )
             && __instance.languageSelectGroup.gameObject.activeSelf
@@ -174,7 +179,12 @@ public sealed partial class SceneCapture : BaseUnityPlugin
     [HarmonyPrefix, HarmonyPatch(typeof(PlayerControlGizmo), "OnOutlineDraw")]
     private static bool ShowcaseOutline()
     {
-        return instance == null || !(instance.solidsGalleryOnly || instance.inserterGalleryOnly);
+        return instance == null
+            || !(
+                instance.solidsGalleryOnly
+                || instance.inserterGalleryOnly
+                || instance.wondersGalleryOnly
+            );
     }
 
     [HarmonyPostfix, HarmonyPatch(typeof(GameCamera), nameof(GameCamera.FrameLogic))]
@@ -198,7 +208,11 @@ public sealed partial class SceneCapture : BaseUnityPlugin
         camera.fieldOfView = 42;
         camera.aspect = 16f / 9;
         camera.targetTexture = instance.target;
-        if (instance.solidsGalleryOnly || instance.inserterGalleryOnly)
+        if (
+            instance.solidsGalleryOnly
+            || instance.inserterGalleryOnly
+            || instance.wondersGalleryOnly
+        )
         {
             camera.ResetProjectionMatrix();
         }
@@ -607,11 +621,11 @@ public sealed partial class SceneCapture : BaseUnityPlugin
             new Bounds(
                 Vector3.zero,
                 new Vector3(
-                    solidsGalleryOnly || inserterGalleryOnly ? 100
+                    solidsGalleryOnly || inserterGalleryOnly || wondersGalleryOnly ? 100
                         : parallelLineOnly ? 62
                         : 38,
                     1,
-                    solidsGalleryOnly || inserterGalleryOnly ? 150
+                    solidsGalleryOnly || inserterGalleryOnly || wondersGalleryOnly ? 150
                         : parallelLineOnly ? 40
                         : 34
                 )
@@ -627,16 +641,21 @@ public sealed partial class SceneCapture : BaseUnityPlugin
             if (
                 planet.data.vegePool[entityId].id == entityId
                 && (planet.data.vegePool[entityId].pos - center).sqrMagnitude
-                    < (solidsGalleryOnly || inserterGalleryOnly ? 14400 : 900)
+                    < (solidsGalleryOnly || inserterGalleryOnly || wondersGalleryOnly ? 14400 : 900)
             )
                 factory.RemoveVegeWithComponents(entityId);
         for (int entityId2 = 1; entityId2 < planet.data.veinCursor; entityId2++)
             if (
                 planet.data.veinPool[entityId2].id == entityId2
                 && (planet.data.veinPool[entityId2].pos - center).sqrMagnitude
-                    < (solidsGalleryOnly || inserterGalleryOnly ? 14400 : 900)
+                    < (solidsGalleryOnly || inserterGalleryOnly || wondersGalleryOnly ? 14400 : 900)
             )
                 factory.RemoveVeinWithComponents(entityId2);
+        if (wondersGalleryOnly)
+        {
+            CreateWondersGallery();
+            return;
+        }
         if (solidsGalleryOnly)
         {
             CreateSolidsGallery();
@@ -1547,6 +1566,14 @@ public sealed partial class SceneCapture : BaseUnityPlugin
     {
         for (int frame = 0; frame < 150; frame++)
             yield return null;
+        if (wondersGalleryOnly)
+        {
+            var gallery = CaptureWondersGallery();
+            while (gallery.MoveNext())
+                yield return gallery.Current;
+            Finish(null);
+            yield break;
+        }
         if (solidsGalleryOnly || inserterGalleryOnly)
         {
             var gallery = solidsGalleryOnly ? CaptureSolidsGallery() : CaptureInserterGallery();
@@ -1794,7 +1821,7 @@ public sealed partial class SceneCapture : BaseUnityPlugin
     private void SaveImage(string name, bool includeUI = false)
     {
         CameraPose();
-        if (parallelLineOnly || solidsGalleryOnly || inserterGalleryOnly)
+        if (parallelLineOnly || solidsGalleryOnly || inserterGalleryOnly || wondersGalleryOnly)
         {
             factory.planet.factoryModel.drawPowerArc = factory.planet.factoryModel.drawPowerConn =
                 false;
@@ -1873,6 +1900,7 @@ public sealed partial class SceneCapture : BaseUnityPlugin
                     && !parallelLineOnly
                     && !machinePortsOnly
                         ? "inspect-results.txt"
+                    : wondersGalleryOnly ? "wonders-gallery-results.txt"
                     : solidsGalleryOnly ? "solids-gallery-results.txt"
                     : inserterGalleryOnly ? "inserter-gallery-results.txt"
                     : machinePortsOnly ? "machine-ports-results.txt"

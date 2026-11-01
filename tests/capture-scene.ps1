@@ -1,7 +1,7 @@
-param([switch]$Connections,[switch]$Cube,[switch]$Structures,[switch]$Gameplay,[switch]$Inserters,[switch]$NativeInserters,[switch]$MinimalLine,[switch]$ParallelLine,[switch]$SolidsGallery,[switch]$InserterGallery,[string]$InspectSave='',[string]$PluginDll='')
+param([switch]$Connections,[switch]$Cube,[switch]$Structures,[switch]$Gameplay,[switch]$Inserters,[switch]$NativeInserters,[switch]$MinimalLine,[switch]$ParallelLine,[switch]$SolidsGallery,[switch]$WondersGallery,[switch]$InserterGallery,[string]$InspectSave='',[string]$PluginDll='')
 $ErrorActionPreference = 'Stop'
 if ($NativeInserters -and !$Inserters) { throw '-NativeInserters requires -Inserters.' }
-if (@($Connections,$Cube,$Structures,$Gameplay,$Inserters,$MinimalLine,$ParallelLine,$SolidsGallery,$InserterGallery | Where-Object { $_ }).Count -gt 1) { throw 'Select one capture scene.' }
+if (@($Connections,$Cube,$Structures,$Gameplay,$Inserters,$MinimalLine,$ParallelLine,$SolidsGallery,$WondersGallery,$InserterGallery | Where-Object { $_ }).Count -gt 1) { throw 'Select one capture scene.' }
 $project = Split-Path $PSScriptRoot -Parent
 if($InspectSave){$InspectSave=(Resolve-Path -LiteralPath $InspectSave).Path}
 dotnet build (Join-Path $PSScriptRoot 'SceneCapture.csproj') -c Release --nologo
@@ -26,7 +26,7 @@ $process = $null
 $modelConfig = Join-Path $bep 'config/com.komonad.dsp.fluidpipes.cfg'
 $modelConfigBackup = $null
 $captureStart = [DateTime]::UtcNow
-$captureMode = if($SolidsGallery){'solids-gallery'}elseif($InserterGallery){'inserter-gallery'}elseif($ParallelLine){'parallel-line'}elseif($MinimalLine){'minimal-line'}elseif($Inserters){'inserters'}elseif($Gameplay){'gameplay'}elseif ($Structures) { 'structures' } elseif ($Cube) { 'cube' } elseif ($Connections) { 'connections' } else { 'comparison' }
+$captureMode = if($WondersGallery){'wonders-gallery'}elseif($SolidsGallery){'solids-gallery'}elseif($InserterGallery){'inserter-gallery'}elseif($ParallelLine){'parallel-line'}elseif($MinimalLine){'minimal-line'}elseif($Inserters){'inserters'}elseif($Gameplay){'gameplay'}elseif ($Structures) { 'structures' } elseif ($Cube) { 'cube' } elseif ($Connections) { 'connections' } else { 'comparison' }
 try {
     if ($Inserters) {
         if (Test-Path -LiteralPath $modelConfig) { $modelConfigBackup = [IO.File]::ReadAllText($modelConfig) }
@@ -57,22 +57,25 @@ try {
     if ($process.ExitCode -ne 0) { throw "Scene capture failed: $($process.ExitCode). See obj/scene-capture/Player.log." }
     $output = Join-Path $plugins 'scene-output'
     if($InspectSave -and !$MinimalLine -and !$ParallelLine){Get-Content -LiteralPath (Join-Path $output 'inspect-results.txt');return}
-    $result = Join-Path $output $(if($NativeInserters){'native-inserters-results.txt'}elseif($SolidsGallery){'solids-gallery-results.txt'}elseif($InserterGallery){'inserter-gallery-results.txt'}elseif($ParallelLine){'parallel-line-results.txt'}elseif($MinimalLine){'minimal-line-results.txt'}elseif($Inserters){'inserters-results.txt'}elseif($Gameplay){'gameplay-results.txt'}elseif ($Structures) { 'structures-results.txt' } elseif ($Cube) { 'cube-results.txt' } elseif ($Connections) { 'connections-results.txt' } else { 'scene-results.txt' })
-    if (!(Test-Path -LiteralPath $result)) { throw 'Scene capture exited without a report.' }
+    $result = Join-Path $output $(if($NativeInserters){'native-inserters-results.txt'}elseif($WondersGallery){'wonders-gallery-results.txt'}elseif($SolidsGallery){'solids-gallery-results.txt'}elseif($InserterGallery){'inserter-gallery-results.txt'}elseif($ParallelLine){'parallel-line-results.txt'}elseif($MinimalLine){'minimal-line-results.txt'}elseif($Inserters){'inserters-results.txt'}elseif($Gameplay){'gameplay-results.txt'}elseif ($Structures) { 'structures-results.txt' } elseif ($Cube) { 'cube-results.txt' } elseif ($Connections) { 'connections-results.txt' } else { 'scene-results.txt' })
+    if (!(Test-Path -LiteralPath $result) -or (Get-Item -LiteralPath $result).LastWriteTimeUtc -lt $captureStart) { throw 'Scene capture exited without a fresh report.' }
     Get-Content -LiteralPath $result
     $pictures = @(Get-ChildItem -LiteralPath $output -Filter 'ingame-*.png' -File)
     $pictures = @($pictures | Where-Object {
-        if($NativeInserters){$_.Name -like 'ingame-native-inserters-*'}elseif($SolidsGallery){$_.Name -like 'ingame-solids-*'}elseif($InserterGallery){$_.Name -like 'ingame-sorters-*'}elseif($ParallelLine){$_.Name -like 'ingame-parallel-line-*'}elseif($MinimalLine){$_.Name -like 'ingame-minimal-line-*'}elseif($Inserters){$_.Name -like 'ingame-inserters-*'}elseif($Gameplay){$_.Name -like 'ingame-gameplay-*'}elseif ($Structures) { $_.Name -like 'ingame-structures-*' }
+        if($NativeInserters){$_.Name -like 'ingame-native-inserters-*'}elseif($WondersGallery){$_.Name -like 'ingame-wonders-*'}elseif($SolidsGallery){$_.Name -like 'ingame-solids-*'}elseif($InserterGallery){$_.Name -like 'ingame-sorters-*'}elseif($ParallelLine){$_.Name -like 'ingame-parallel-line-*'}elseif($MinimalLine){$_.Name -like 'ingame-minimal-line-*'}elseif($Inserters){$_.Name -like 'ingame-inserters-*'}elseif($Gameplay){$_.Name -like 'ingame-gameplay-*'}elseif ($Structures) { $_.Name -like 'ingame-structures-*' }
         elseif ($Cube) { $_.Name -like 'ingame-cube-*' }
         elseif ($Connections) { $_.Name -like 'ingame-connections-*' }
         else { $_.Name -in @('ingame-comparison-overview.png','ingame-comparison-straight-elbow.png','ingame-comparison-junction-riser.png','ingame-pipe-junction-closeup.png','ingame-belt-junction-closeup.png','ingame-tank-pipe-materials.png','ingame-filled-pipe.png','ingame-empty-pipe.png','ingame-single-nodes.png') }
     })
-    $expected = if($NativeInserters){2}elseif($SolidsGallery){11}elseif($InserterGallery){14}elseif($ParallelLine){7}elseif($MinimalLine){4}elseif($Inserters){10}elseif($Gameplay){3}elseif ($Structures) { 5 } elseif ($Cube) { 7 } elseif ($Connections) { 2 } else { 9 }
+    $expected = if($NativeInserters){2}elseif($WondersGallery){8}elseif($SolidsGallery){11}elseif($InserterGallery){14}elseif($ParallelLine){7}elseif($MinimalLine){4}elseif($Inserters){10}elseif($Gameplay){3}elseif ($Structures) { 5 } elseif ($Cube) { 7 } elseif ($Connections) { 2 } else { 9 }
     if ($pictures.Count -lt $expected -or @($pictures | Where-Object { $_.LastWriteTimeUtc -lt $captureStart }).Count -gt 0) { throw "Scene capture did not produce $expected fresh images." }
-    $destination = Join-Path $project $(if($SolidsGallery -or $InserterGallery){'screenshots/showcase'}else{'screenshots/ingame'})
+    $destination = Join-Path $project $(if($SolidsGallery -or $InserterGallery -or $WondersGallery){'screenshots/showcase'}else{'screenshots/ingame'})
     New-Item -ItemType Directory -Path $destination -Force | Out-Null
     foreach ($picture in $pictures) { Copy-Item -LiteralPath $picture.FullName -Destination $destination -Force }
     Copy-Item -LiteralPath $result -Destination $destination -Force
+    if ($WondersGallery) {
+        Copy-Item -LiteralPath (Join-Path $output 'blueprints') -Destination $destination -Recurse -Force
+    }
 } finally {
     if ($process) { if (!$process.HasExited) { Stop-Process -Id $process.Id }; $process.Dispose() }
     if ($Inserters) { [IO.File]::WriteAllText($modelConfig, $(if ($null -ne $modelConfigBackup) { $modelConfigBackup } else { '' })) }

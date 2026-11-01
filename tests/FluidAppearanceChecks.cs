@@ -21,7 +21,7 @@ public sealed partial class RuntimeChecks
             Color expected = tankColors[index].linear * 1.5f;
             Color actual = ReadFluidTint(PipeVisuals.LiquidMaterial(items[index]));
             Check(
-                ColorDistance(actual, expected) < 0.003f && Math.Abs(actual.a - 0.68f) < 0.001f,
+                ColorDistance(actual, expected) < 0.003f && Math.Abs(actual.a - 0.78f) < 0.001f,
                 "pipe tint matches native tank color and linear exposure for item " + items[index]
             );
         }

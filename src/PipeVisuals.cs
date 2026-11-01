@@ -11,7 +11,7 @@ namespace FluidPipes
     {
         private const float ChunkSize = 16;
         private const float StructureChunkSize = 32;
-        private const float FluidOpacity = 0.68f;
+        private const float FluidOpacity = 0.78f;
 
         private readonly struct ChunkKey : IEquatable<ChunkKey>
         {
@@ -278,7 +278,7 @@ namespace FluidPipes
                         ?? shader;
                     body = new Material(glassShader);
                     body.name = "FluidPipes.GlassWall";
-                    body.color = new Color(0.90f, 0.96f, 0.98f, 0.22f);
+                    body.color = new Color(0.94f, 0.98f, 1f, 0.12f);
                     body.SetTexture("_MainTex", Texture2D.whiteTexture);
                     Transparent(body, 3000);
                     if (body.HasProperty("_SpecColor"))
@@ -293,12 +293,12 @@ namespace FluidPipes
                     {
                         var rimColor =
                             glass?.GetColor("_RimColor") ?? new Color(0.604f, 0.846f, 0.859f);
-                        rimColor.a = 0.3f;
+                        rimColor.a = 0.18f;
                         body.SetColor("_RimColor", rimColor);
                     }
                     if (body.HasProperty("_SpecularColor"))
                     {
-                        body.SetColor("_SpecularColor", new Color(0.26f, 0.27f, 0.28f));
+                        body.SetColor("_SpecularColor", new Color(0.20f, 0.21f, 0.22f));
                     }
 
                     if (body.HasProperty("_MetallicMultiplier"))
@@ -308,7 +308,7 @@ namespace FluidPipes
 
                     if (body.HasProperty("_SmoothMultiplier"))
                     {
-                        body.SetFloat("_SmoothMultiplier", 0.94f);
+                        body.SetFloat("_SmoothMultiplier", 0.9f);
                     }
 
                     if (body.HasProperty("_MS_Tex"))
@@ -318,7 +318,7 @@ namespace FluidPipes
 
                     joint = new Material(shader);
                     joint.name = "FluidPipes.Coupling";
-                    joint.color = new Color(0.82f, 0.84f, 0.86f);
+                    joint.color = new Color(0.72f, 0.76f, 0.80f);
                     machinePanel = new Material(shader)
                     {
                         name = "FluidPipes.MachinePanel",
@@ -348,12 +348,12 @@ namespace FluidPipes
 
                     if (joint.HasProperty("_Metallic"))
                     {
-                        joint.SetFloat("_Metallic", 0.98f);
+                        joint.SetFloat("_Metallic", 0.92f);
                     }
 
                     if (joint.HasProperty("_Glossiness"))
                     {
-                        joint.SetFloat("_Glossiness", 0.86f);
+                        joint.SetFloat("_Glossiness", 0.64f);
                     }
 
                     innerBody = new Material(body)

@@ -24,6 +24,22 @@
 
 ![单格边长为3的玻璃管立体网格](images/fluid-lattice.png)
 
+## 流体浑天仪与双螺旋塔
+
+浑天仪包含五个不同倾角与半径的流体圆环、中心两个互锁环和一个水平底环。807 个玻璃管道节点组成八条独立管路，外圈直径为 36 世界单位。
+
+![玻璃管流体浑天仪](images/fluid-armillary.png)
+
+![黄昏的流体浑天仪](images/fluid-armillary-dusk.png)
+
+双螺旋塔的两条管路分别装有水与重氢，半径为 6.4，上升 42 世界单位并旋转三圈。三个硫酸水平环分别位于底部、中部与顶部，730 个节点组成五条独立管路。
+
+![玻璃管双螺旋塔](images/fluid-double-helix.png)
+
+![黄昏的双螺旋塔](images/fluid-double-helix-dusk.png)
+
+[原生蓝图与配色说明](../blueprints/README.md)包含两座奇观的可导入文本。蓝图保存位置和连接，建成后需要单独注入流体。两份蓝图经过游戏原生预览、碰撞检查、待建生成、实际建造和逐边拓扑验证。
+
 ## 液体分拣器
 
 阵列从左到右为分拣器、高速分拣器、极速分拣器和集装分拣器；每种等级展示 1、2、3 三种跨度。玻璃臂、金属弯管、端点管箍与等级箭头随实际端点位置生成。
@@ -47,6 +63,7 @@
 ```powershell
 pwsh -NoProfile -File tests/capture-scene.ps1 -SolidsGallery
 pwsh -NoProfile -File tests/capture-scene.ps1 -InserterGallery
+pwsh -NoProfile -File tests/capture-scene.ps1 -WondersGallery
 ```
 
-两项命令分别启动隔离的后台沙盒。完整 PNG 截图和检查报告写入 `screenshots/showcase/`。几何体检查连接度数、单一流体身份、容量和远端提取守恒；分拣器检查原生组件、端点角色、显示归属、库存隔离与供电标记。
+命令分别启动隔离的后台沙盒。完整 PNG 截图和检查报告写入 `screenshots/showcase/`，奇观蓝图同时写入其 `blueprints/` 子目录。几何体检查连接度数、单一流体身份、容量和远端提取守恒；分拣器检查原生组件、端点角色、显示归属、库存隔离与供电标记。奇观场景调整隔离星球的自转相位，使用原生光照拍摄白天和黄昏视图。

@@ -76,11 +76,58 @@ public sealed partial class RuntimeChecks
             PipeCurvedAttachmentGeometry();
             PipeBranchedAttachmentGeometry();
             PipeIsolatedAttachmentGeometry();
+            PipeVerticalFrameContinuity();
         }
         finally
         {
             PipeVisuals.Clear();
             PipeRuntime.Clear();
+        }
+    }
+
+    private void PipeVerticalFrameContinuity()
+    {
+        foreach (float direction in new[] { -1f, 1f })
+        {
+            var ends = new[]
+            {
+                new Vector3(-0.012f, -0.3f * direction, 0),
+                new Vector3(-0.012f, 0.3f * direction, 0),
+            };
+            var builder = new PipeMesh(trim: false);
+            builder.Node(
+                Vector3.zero,
+                Vector3.up,
+                Vector3.forward,
+                ends,
+                new[] { false, false },
+                new[] { ends[0].normalized, ends[1].normalized },
+                new[] { Vector3.up, Vector3.up }
+            );
+            var mesh = builder.Build("VerticalFrameContinuity");
+            try
+            {
+                var vertices = mesh.vertices;
+                float minimumRadius = float.MaxValue;
+                for (int index = 0; index < 32; index++)
+                {
+                    Vector3 midpoint = (vertices[index] + vertices[index + 33]) * 0.5f;
+                    midpoint -= new Vector3(-0.012f, 0, 0);
+                    minimumRadius = Mathf.Min(
+                        minimumRadius,
+                        Vector3.ProjectOnPlane(midpoint, Vector3.up).magnitude
+                    );
+                }
+                Check(
+                    minimumRadius > PipeMesh.Radius * 0.99f,
+                    "pipe cross-section retains its radius when shared frames cross a vertical tangent in direction "
+                        + direction
+                );
+            }
+            finally
+            {
+                UnityEngine.Object.Destroy(mesh);
+            }
         }
     }
 
