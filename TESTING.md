@@ -50,7 +50,17 @@ pwsh -NoProfile -File tests/capture-scene.ps1 -ParallelLine -InspectSave "$scene
 
 ## 手动验证
 
-`pwsh -NoProfile -File tests/capture-scene.ps1 -WondersGallery` 在隔离沙盒中生成浑天仪、双螺旋塔和八张 2560×1440 截图，并导出两份原生蓝图。蓝图验证重新读取文件后的每条连接，执行原生预览碰撞检查、生成待建并完成建造，逐边比较拓扑、检查空库存及各独立管路的重新注液。验证期间启用最高级建造高度与垂直传送带科技，结束后恢复科技状态。截图、报告与蓝图位于 `screenshots/showcase/`。
+`pwsh -NoProfile -File tests/capture-scene.ps1 -WondersGallery` 在隔离沙盒中生成浑仪、双螺旋塔和八张 2560×1440 截图，并导出原生蓝图。蓝图检查覆盖逐边恢复、六向交汇、环路、选区裁剪、密集节点、待建与实体混合复制、盖建补边及库存保留。损坏的图数据和会混液的强制放置在变更工厂前拒绝。验证期间启用最高级建造高度与垂直传送带科技，结束后恢复科技状态。截图、报告与蓝图位于 `screenshots/showcase/`。
+
+网格建到一半时保存原生 `.dsv`、DSPModSave `.moddsv` 和检查用节点映射。用独立游戏进程重载，再完成剩余待建并核对全部 900 条边、六向交汇、共享库存和远端存取守恒：
+
+```powershell
+pwsh -NoProfile -File tests/capture-scene.ps1 -WondersGallery
+pwsh -NoProfile -File tests/capture-scene.ps1 -WondersGallery -InspectSave obj/scene-capture/profile/BepInEx/plugins/scene-output/pipe-blueprint-pending.dsv
+```
+
+节点映射 `.graph` 仅供测试验证；玩家蓝图的连接信息保存在单份 `BLUEPRINT:` 文本中。
+
 
 1. 在普通存档研究储液罐科技，确认管道、阀门配方和建造栏条目出现；分别从栏位选中并开始建造。
 2. 延长、转弯、升降和分支连接管道；尝试重复覆盖节点，以及连接普通传送带，检查碰撞和连接限制。

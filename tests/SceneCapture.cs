@@ -251,7 +251,12 @@ public sealed partial class SceneCapture : BaseUnityPlugin
             {
                 try
                 {
-                    if (machinePortsOnly)
+                    if (wondersGalleryOnly)
+                    {
+                        CheckRestoredBlueprintGraph();
+                        Finish(null);
+                    }
+                    else if (machinePortsOnly)
                     {
                         RestoreMachinePortScene();
                         StartCoroutine(Guard(Capture()));

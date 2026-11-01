@@ -19,6 +19,7 @@
         <Compile Include="CopperIconChecks.cs" />
         <Compile Include="PipeIconApiChecks.cs" />
         <Compile Include="PipeAttachmentChecks.cs" />
+        <Compile Include="PipeBlueprintChecks.cs" />
         <Compile Include="MachinePortChecks.cs" />
         <Compile Include="InserterAppearanceChecks.cs" />
         <Compile Include="FluidAppearanceChecks.cs" />

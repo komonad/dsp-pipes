@@ -310,6 +310,7 @@ public sealed partial class RuntimeChecks : BaseUnityPlugin
         Test("unselected station input binds its fluid space", StationInputBinding);
         Test("undirected unlimited pipe interfaces", Undirected);
         Test("prebuild identifiers migrate without stale slots", PrebuildMigration);
+        Test("blueprint graph metadata validation", BlueprintGraphParameters);
         Test("legacy connection restoration", LegacyConnections);
         Test("connection cuts preserve nodes and inventories", ConnectionCuts);
         Test("pipe selection without native render batches", Selection);

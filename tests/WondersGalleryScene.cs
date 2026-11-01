@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using FluidPipes;
+using FluidPipes.Integration.Belts;
 using UnityEngine;
 
 public sealed partial class SceneCapture
@@ -15,80 +16,7 @@ public sealed partial class SceneCapture
 
     private void CreateWondersGallery()
     {
-        armillaryFrame = NewSolidPiece("armillary", 0, 0, 0);
-        armillaryFrame.Center = armillaryFrame.Origin + armillaryFrame.Up * 21.8f;
-        armillaryFrame.Radius = 20;
-        int[] fluids = { 1116, 1000, 1121, 1114, 1007 };
-        var rotations = new[]
-        {
-            Quaternion.Euler(8, 0, 0),
-            Quaternion.Euler(40, 60, 25),
-            Quaternion.Euler(105, 120, 20),
-            Quaternion.Euler(55, 30, 75),
-            Quaternion.Euler(135, 40, 30),
-        };
-        for (int ring = 0; ring < rotations.Length; ring++)
-        {
-            float radius = 18 - ring * 1.8f;
-            Quaternion rotation = rotations[ring];
-            armillary.Add(
-                BuildWonderCurve(
-                    "armillary-ring-" + (ring + 1),
-                    0,
-                    0,
-                    fluids[ring],
-                    Mathf.CeilToInt(2 * Mathf.PI * radius / 0.85f),
-                    true,
-                    t =>
-                        new Vector3(0, 21.8f, 0)
-                        + rotation
-                            * new Vector3(
-                                radius * Mathf.Cos(t * 2 * Mathf.PI),
-                                radius * Mathf.Sin(t * 2 * Mathf.PI),
-                                0
-                            )
-                )
-            );
-        }
-        for (int link = 0; link < 2; link++)
-        {
-            bool perpendicular = link == 1;
-            armillary.Add(
-                BuildWonderCurve(
-                    "armillary-core-" + (link + 1),
-                    0,
-                    0,
-                    perpendicular ? 1114 : 1120,
-                    64,
-                    true,
-                    t =>
-                    {
-                        float a = t * 2 * Mathf.PI;
-                        float x = (perpendicular ? 2.75f : -2.75f) + 5.5f * Mathf.Cos(a);
-                        return new Vector3(
-                            x,
-                            21.8f + (perpendicular ? 0 : 5.5f * Mathf.Sin(a)),
-                            perpendicular ? 5.5f * Mathf.Sin(a) : 0
-                        );
-                    }
-                )
-            );
-        }
-        armillary.Add(
-            BuildWonderCurve(
-                "armillary-plinth",
-                0,
-                0,
-                1000,
-                144,
-                true,
-                t => new Vector3(
-                    19 * Mathf.Cos(t * 2 * Mathf.PI),
-                    1,
-                    19 * Mathf.Sin(t * 2 * Mathf.PI)
-                )
-            )
-        );
+        CreateArmillary();
 
         helixFrame = NewSolidPiece("double-helix", 65, 0, 0);
         helixFrame.Center = helixFrame.Origin + helixFrame.Up * 24;
@@ -201,11 +129,15 @@ public sealed partial class SceneCapture
             .ToDictionary(value => value.node, value => value.index);
         var expected = new HashSet<long>();
         foreach (int node in nodes)
-        foreach (int peer in PipeTopology.Neighbors(factory, node))
+        foreach (int peer in PipeTopology.Neighbors(factory, node).Where(indexByNode.ContainsKey))
             expected.Add(WonderEdge(indexByNode[node], indexByNode[peer]));
         var actual = new HashSet<long>();
         foreach (var building in loaded.buildings)
         {
+            var peers = PipeBlueprints.Neighbors(building, loaded.buildings.Length, out _);
+            if (peers != null)
+                foreach (int peer in peers)
+                    actual.Add(WonderEdge(building.index, peer));
             if (building.outputObj != null)
                 actual.Add(WonderEdge(building.index, building.outputObj.index));
             if (building.inputObj != null)
@@ -234,7 +166,8 @@ public sealed partial class SceneCapture
         BlueprintData blueprint,
         int[] sourceNodes,
         List<SolidGalleryPiece> pieces,
-        string name
+        string name,
+        float pasteX = 0
     )
     {
         var player = GameMain.mainPlayer;
@@ -248,9 +181,11 @@ public sealed partial class SceneCapture
         int previousLabLevel = GameMain.history.labLevel;
         bool previousVertical = GameMain.history.beltVerticalConstruction;
         var created = new List<int>();
+        var builtIds = new int[sourceNodes.Length];
+        BlueprintData partialCopy = null;
         try
         {
-            player.position = Point(0, -90);
+            player.position = Point(pasteX, -90);
             player.mecha.buildArea = 200;
             GameMain.history.labLevel = 15;
             GameMain.history.beltVerticalConstruction = true;
@@ -295,7 +230,15 @@ public sealed partial class SceneCapture
                 throw new InvalidOperationException(
                     "Sculpture blueprint does not create every prebuild."
                 );
-            for (int index = 0; index < pending.Length; index++)
+            var currentIds = (int[])pending.Clone();
+            AssertBlueprintGraph(blueprint, currentIds);
+            int completed = 0;
+            foreach (
+                int index in Enumerable
+                    .Range(0, pending.Length)
+                    .OrderBy(value => value % 2)
+                    .ThenByDescending(value => value)
+            )
             {
                 var position = factory.prebuildPool[-pending[index]].pos;
                 factory.BuildFinally(player, -pending[index], false, false);
@@ -315,16 +258,40 @@ public sealed partial class SceneCapture
                         "Sculpture blueprint prebuild does not complete."
                     );
                 created.Add(built);
+                builtIds[index] = currentIds[index] = built;
                 tool.NotifyBuilt(pending[index], built);
+                completed++;
+                if (completed == pending.Length / 2 && name == "fluid-lattice")
+                {
+                    AssertBlueprintGraph(blueprint, currentIds);
+                    SaveBlueprintGraphStage(blueprint, currentIds);
+                    partialCopy = BlueprintData.CreateNew();
+                    BlueprintUtils.GenerateBlueprintData(
+                        partialCopy,
+                        factory.planet,
+                        factory.planet.aux,
+                        currentIds,
+                        currentIds.Length,
+                        BlueprintUtils.GetLongitudeRad(up) - Mathf.PI,
+                        null,
+                        false
+                    );
+                    partialCopy = BlueprintData.CreateNew(partialCopy.ToBase64String());
+                    AssertBlueprintGraph(partialCopy, currentIds);
+                    report.Add("PASS blueprint copy includes both completed and pending vertices.");
+                }
             }
             var graph = PipeRuntime.Bind(factory.cargoTraffic);
             var builtBySource = sourceNodes
                 .Select((source, index) => new { source, index })
-                .ToDictionary(value => value.source, value => created[value.index]);
+                .ToDictionary(value => value.source, value => builtIds[value.index]);
             foreach (int source in sourceNodes)
             {
                 var expectedPeers = new HashSet<int>(
-                    PipeTopology.Neighbors(factory, source).Select(peer => builtBySource[peer])
+                    PipeTopology
+                        .Neighbors(factory, source)
+                        .Where(builtBySource.ContainsKey)
+                        .Select(peer => builtBySource[peer])
                 );
                 if (!expectedPeers.SetEquals(graph.Links(builtBySource[source])))
                     throw new InvalidOperationException(
@@ -336,7 +303,7 @@ public sealed partial class SceneCapture
             {
                 for (int index = 0; index < piece.Nodes.Count; index++)
                 {
-                    int built = created[offset + index];
+                    int built = builtIds[offset + index];
                     var view = graph.View(built);
                     if (
                         view.Nodes != piece.Nodes.Count
@@ -348,13 +315,24 @@ public sealed partial class SceneCapture
                         );
                 }
                 if (
-                    !graph.Insert(created[offset], piece.Item, piece.Stock, 0)
-                    || graph.View(created[offset + piece.Nodes.Count - 1]).Count != piece.Stock
+                    !graph.Insert(builtIds[offset], piece.Item, piece.Stock, 0)
+                    || graph.View(builtIds[offset + piece.Nodes.Count - 1]).Count != piece.Stock
                 )
                     throw new InvalidOperationException(
                         "Pasted sculpture circuit cannot hold its fluid."
                     );
                 offset += piece.Nodes.Count;
+            }
+            if (partialCopy != null)
+            {
+                CheckBlueprintOverlay(blueprint, builtIds, player.position);
+                CheckWonderBlueprintPaste(
+                    partialCopy,
+                    sourceNodes,
+                    pieces,
+                    name + "-partial-copy",
+                    55
+                );
             }
             report.Add(
                 "PASS BLUEPRINT "
@@ -436,5 +414,6 @@ public sealed partial class SceneCapture
             ValidateSolidInventory(piece);
         ExportWonderBlueprint("fluid-armillary", "Fluid Armillary", armillary);
         ExportWonderBlueprint("fluid-double-helix", "Fluid Double Helix", helixTower);
+        CheckBlueprintGraphFixtures();
     }
 }

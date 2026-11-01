@@ -11,6 +11,8 @@
         <Compile Include="ShowcaseScene.cs" />
         <Compile Include="SolidsGalleryScene.cs" />
         <Compile Include="WondersGalleryScene.cs" />
+        <Compile Include="ArmillaryScene.cs" />
+        <Compile Include="BlueprintGraphScene.cs" />
         <Compile Include="InserterGalleryScene.cs" />
         <Compile Include="FluidGameplayScene.cs" />
         <Compile Include="FluidInserterScene.cs" />

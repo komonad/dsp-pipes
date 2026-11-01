@@ -353,6 +353,8 @@ public sealed partial class SceneCapture
 
     private void ConnectSolidNodes(SolidGalleryPiece piece, int first, int second)
     {
+        if (PipeTopology.Adjacent(factory, first, second))
+            return;
         if (!PipeConnections.Connect(factory, first, second, 0, 1))
         {
             throw new InvalidOperationException("A solid edge cannot connect its pipe nodes.");

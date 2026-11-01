@@ -68,6 +68,14 @@ Stable pure-pipe I/O accesses inventory through the component index. Shared I/O 
 
 Rendering caches geometry independently of inventory. Fluid presence and item identity select materials, while connection changes invalidate geometry caches. Native construction geometry, connection slots and inserter logic form the compatibility boundaries tested inside the Unity runtime.
 
+## Blueprint graphs
+
+`PipeBlueprints` appends an `FPG1` trailer to native building parameters: a neighbor count, blueprint-local vertex indices, the native parameter length, and a closing marker. Each undirected edge is recorded by its lower-index endpoint; vertices outside the selection are excluded. Preview initialization strips this trailer while preserving native parameters. Per-vertex parameter arrays respect the native signed 16-bit length limit.
+
+Undirected pipe vertices retain their identities while native overlap folding continues for other buildings. Graph edges are restored after prebuild creation with separate vertex mappings for repeated placements. Matching items and positions reuse existing entities or prebuilds without native belt path replacement. Object migration and DSPModSave topology serialization retain edges between completed and pending vertices.
+
+Placement validates lengths, indices, duplicate references, type families, and inventory identities that covered vertices would merge. Rejected placements enter neither native prebuild creation nor graph restoration. Blueprints without graph trailers retain native connection references.
+
 ## Verification
 
 `tests/CoreSuite.cs` exercises connectivity, conservation, randomized operations, concurrent core I/O and admission-set rules. `tests/ApiChecks.cs` exercises the public contract and verifies XML documentation for every exported API type, member and parameter. Native runtime fixtures test cargo hooks, containers, valves, placement and inserters. The example consumer builds as its own assembly.
